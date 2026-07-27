@@ -1,9 +1,37 @@
 import { NextResponse } from 'next/server';
 import { scrapeGoogleMaps, scrapeYellowPages, scrapeYelp, scrapeTripAdvisor, scrapeZillow, scrapeLinkedIn, scrapeApollo, ScrapedBusiness } from './scraper';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 export const maxDuration = 60;
 
 export const jobsStore: Record<string, any> = {};
+
+function getJobFilePath(jobId: string) {
+  return path.join(os.tmpdir(), `data_miner_job_${jobId}.json`);
+}
+
+function writeJobState(jobId: string, data: any) {
+  jobsStore[jobId] = data;
+  try {
+    fs.writeFileSync(getJobFilePath(jobId), JSON.stringify(data), 'utf-8');
+  } catch (e) {}
+}
+
+function readJobState(jobId: string): any {
+  if (jobsStore[jobId]) return jobsStore[jobId];
+  try {
+    const filePath = getJobFilePath(jobId);
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(content);
+      jobsStore[jobId] = parsed;
+      return parsed;
+    }
+  } catch (e) {}
+  return null;
+}
 
 export async function POST(request: Request) {
   try {
@@ -15,7 +43,7 @@ export async function POST(request: Request) {
 
     const jobId = Math.random().toString(36).substring(2, 15);
     
-    jobsStore[jobId] = {
+    const initialState = {
       id: jobId,
       status: 'processing',
       progress: 'Initializing agent crew...',
@@ -23,10 +51,23 @@ export async function POST(request: Request) {
       resultData: null
     };
 
-    // Run scraping in background
-    runAgentCrew(jobId, niche, location, platforms, maxResults);
+    writeJobState(jobId, initialState);
 
-    return NextResponse.json({ jobId, status: 'processing' });
+    // On Vercel serverless platform, await execution so job completes within lambda duration
+    if (process.env.VERCEL) {
+      await runAgentCrew(jobId, niche, location, platforms, maxResults);
+      const completedState = readJobState(jobId);
+      return NextResponse.json({ 
+        jobId, 
+        status: completedState?.status || 'completed', 
+        progress: completedState?.progress || 'Job completed.',
+        logs: completedState?.logs || [],
+        resultData: completedState?.resultData || [] 
+      });
+    } else {
+      runAgentCrew(jobId, niche, location, platforms, maxResults);
+      return NextResponse.json({ jobId, status: 'processing' });
+    }
   } catch (error: any) {
     console.error('Error starting job:', error);
     return NextResponse.json({ error: error.message || 'Failed to initialize extraction job.' }, { status: 500 });
@@ -44,7 +85,6 @@ function mergeAndDeduplicateLeads(leads: ScrapedBusiness[]): ScrapedBusiness[] {
   for (const item of leads) {
     if (!item || !item.Name || item.Name === 'Unknown Name') continue;
 
-    // Create clean key for deduplication
     const cleanName = item.Name.toLowerCase().replace(/[^a-z0-9]/g, '');
     const cleanPhone = item.Phone && item.Phone !== 'N/A' ? item.Phone.replace(/[^0-9]/g, '') : '';
     
@@ -55,12 +95,10 @@ function mergeAndDeduplicateLeads(leads: ScrapedBusiness[]): ScrapedBusiness[] {
     } else {
       const existing = mergedMap.get(key)!;
 
-      // Combine unique sources (e.g., "Google Maps, YellowPages, Yelp")
       const sourcesSet = new Set(existing.Source.split(',').map(s => s.trim()).filter(Boolean));
       item.Source.split(',').map(s => s.trim()).filter(Boolean).forEach(s => sourcesSet.add(s));
       existing.Source = Array.from(sourcesSet).join(', ');
 
-      // Fill in missing contact data from alternate platforms
       if ((!existing.Phone || existing.Phone === 'N/A') && item.Phone && item.Phone !== 'N/A') {
         existing.Phone = item.Phone;
       }
@@ -80,16 +118,17 @@ function mergeAndDeduplicateLeads(leads: ScrapedBusiness[]): ScrapedBusiness[] {
 }
 
 async function runAgentCrew(jobId: string, niche: string, location: string, platforms: string[], maxResults: number) {
+  const state = readJobState(jobId) || { id: jobId, logs: [], progress: '' };
+  
   const log = (msg: string) => {
-    if (jobsStore[jobId]) {
-      jobsStore[jobId].logs.push(msg);
-      jobsStore[jobId].progress = msg;
-    }
+    state.logs.push(msg);
+    state.progress = msg;
+    writeJobState(jobId, state);
     console.log(`[Job ${jobId}] ${msg}`);
   };
 
   try {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 200));
     log(`Search Agent: Formulating multi-source search strategy for ${niche} in ${location}...`);
     
     let rawLeads: ScrapedBusiness[] = [];
@@ -134,18 +173,17 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
     log(`Deduplicating and merging sources for ${rawLeads.length} raw leads...`);
     const mergedLeads = mergeAndDeduplicateLeads(rawLeads);
 
-    if (jobsStore[jobId]) {
-      jobsStore[jobId].resultData = mergedLeads;
-      jobsStore[jobId].status = 'completed';
-      jobsStore[jobId].progress = 'Job completed successfully.';
-    }
+    state.resultData = mergedLeads;
+    state.status = 'completed';
+    state.progress = 'Job completed successfully.';
+    writeJobState(jobId, state);
+
     log(`Process finished successfully. Extracted ${mergedLeads.length} unique enriched leads with full source mapping.`);
 
   } catch (error: any) {
-    if (jobsStore[jobId]) {
-      jobsStore[jobId].status = 'failed';
-      jobsStore[jobId].progress = `Error: ${error.message}`;
-    }
+    state.status = 'failed';
+    state.progress = `Error: ${error.message}`;
+    writeJobState(jobId, state);
     log(`Error: ${error.message}`);
   }
 }
@@ -154,9 +192,14 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const jobId = searchParams.get('jobId');
 
-  if (!jobId || !jobsStore[jobId]) {
+  if (!jobId) {
+    return NextResponse.json({ error: 'Missing jobId parameter' }, { status: 400 });
+  }
+
+  const job = readJobState(jobId);
+  if (!job) {
     return NextResponse.json({ error: 'Job not found' }, { status: 404 });
   }
 
-  return NextResponse.json(jobsStore[jobId]);
+  return NextResponse.json(job);
 }

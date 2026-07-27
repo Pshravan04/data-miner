@@ -60,6 +60,10 @@ export default function Home() {
       const data = await res.json();
       if (res.ok && data.jobId) {
         setJobId(data.jobId);
+        if (data.status) setStatus(data.status);
+        if (data.progress) setProgress(data.progress);
+        if (data.logs) setLogs(data.logs);
+        if (data.resultData) setResultData(data.resultData);
       } else {
         setStatus('failed');
         setProgress(data.error || 'Server error starting extraction job.');
