@@ -14,6 +14,71 @@ export interface ScrapedBusiness {
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
+/**
+ * Safely attempts to launch Playwright Chromium binary.
+ * If running on Vercel Serverless where Chromium binaries are absent, returns null gracefully
+ * allowing fallback to HTTP Cheerio extraction without throwing a 500 error page.
+ */
+async function safeLaunchBrowser(logCallback: (msg: string) => void) {
+  try {
+    return await chromium.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+  } catch (error: any) {
+    logCallback(`[Serverless Notice] Playwright Chromium binary is not pre-installed on Vercel lambda runtime.`);
+    logCallback(`[Serverless Notice] Switch to Railway, Render, or Docker VPS for full Playwright browser automation.`);
+    return null;
+  }
+}
+
+/**
+ * Lightweight HTTP Search Fallback for Serverless Runtimes (Vercel)
+ */
+async function scrapeHttpSearchFallback(
+  niche: string, 
+  location: string, 
+  sourceName: string,
+  maxResults: number,
+  logCallback: (msg: string) => void
+): Promise<ScrapedBusiness[]> {
+  logCallback(`[HTTP Engine] Running HTTP fallback scraper for ${niche} in ${location}...`);
+  const results: ScrapedBusiness[] = [];
+  try {
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(niche + ' in ' + location)}`;
+    const res = await fetch(searchUrl, {
+      headers: { 'User-Agent': DEFAULT_USER_AGENT }
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      $('.result').each((i, el) => {
+        if (results.length >= maxResults) return false;
+        const title = $(el).find('.result__title').text().trim();
+        const url = $(el).find('.result__url').attr('href') || 'N/A';
+        const cleanUrl = url.startsWith('http') ? url : (url.includes('//') ? 'https:' + url : 'N/A');
+        
+        if (title) {
+          results.push({
+            Name: title.split('-')[0].split('|')[0].trim(),
+            Niche: niche,
+            Location: location,
+            Phone: 'N/A',
+            Email: 'N/A',
+            Website: cleanUrl,
+            Ratings: 'N/A',
+            Source: `${sourceName} (HTTP Engine)`
+          });
+        }
+      });
+    }
+  } catch (e: any) {
+    logCallback(`[HTTP Engine] Search Fallback error: ${e.message}`);
+  }
+  logCallback(`[HTTP Engine] Search fallback complete. Collected ${results.length} leads.`);
+  return results;
+}
+
 // ----------------------------------------------------
 // 1. Google Maps Scraper
 // ----------------------------------------------------
@@ -25,23 +90,22 @@ export async function scrapeGoogleMaps(
 ): Promise<ScrapedBusiness[]> {
   logCallback(`Launching Playwright stealth browser for Google Maps...`);
   
+  const browser = await safeLaunchBrowser(logCallback);
+  if (!browser) {
+    return scrapeHttpSearchFallback(niche, location, 'Google Maps', maxResults, logCallback);
+  }
+
   const results: ScrapedBusiness[] = [];
   const searchQuery = `${niche} in ${location}`;
   
-  const browser = await chromium.launch({ 
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  });
-
-  const context = await browser.newContext({
-    userAgent: DEFAULT_USER_AGENT,
-    viewport: { width: 1280, height: 720 },
-    permissions: ['geolocation']
-  });
-
-  const page = await context.newPage();
-
   try {
+    const context = await browser.newContext({
+      userAgent: DEFAULT_USER_AGENT,
+      viewport: { width: 1280, height: 720 },
+      permissions: ['geolocation']
+    });
+
+    const page = await context.newPage();
     logCallback(`Navigating to Google Maps: ${searchQuery}`);
     await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3500);
@@ -137,8 +201,8 @@ export async function scrapeYellowPages(
     });
 
     if (!res.ok) {
-      logCallback(`YellowPages HTTP error: ${res.statusText}`);
-      return results;
+      logCallback(`YellowPages HTTP response: ${res.status}`);
+      return scrapeHttpSearchFallback(niche, location, 'YellowPages', maxResults, logCallback);
     }
 
     const html = await res.text();
@@ -166,6 +230,7 @@ export async function scrapeYellowPages(
     });
   } catch (error: any) {
     logCallback(`YellowPages error: ${error.message}`);
+    return scrapeHttpSearchFallback(niche, location, 'YellowPages', maxResults, logCallback);
   }
 
   logCallback(`YellowPages extraction complete. Collected ${results.length} leads.`);
@@ -183,14 +248,18 @@ export async function scrapeYelp(
 ): Promise<ScrapedBusiness[]> {
   logCallback(`Launching Playwright browser for Yelp...`);
   
+  const browser = await safeLaunchBrowser(logCallback);
+  if (!browser) {
+    return scrapeHttpSearchFallback(niche, location, 'Yelp', maxResults, logCallback);
+  }
+
   const results: ScrapedBusiness[] = [];
   const searchUrl = `https://www.yelp.com/search?find_desc=${encodeURIComponent(niche)}&find_loc=${encodeURIComponent(location)}`;
   
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ userAgent: DEFAULT_USER_AGENT });
-  const page = await context.newPage();
-
   try {
+    const context = await browser.newContext({ userAgent: DEFAULT_USER_AGENT });
+    const page = await context.newPage();
+
     logCallback(`Navigating to Yelp search...`);
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
@@ -238,14 +307,18 @@ export async function scrapeTripAdvisor(
 ): Promise<ScrapedBusiness[]> {
   logCallback(`Launching Playwright browser for TripAdvisor...`);
   
+  const browser = await safeLaunchBrowser(logCallback);
+  if (!browser) {
+    return scrapeHttpSearchFallback(niche, location, 'TripAdvisor', maxResults, logCallback);
+  }
+
   const results: ScrapedBusiness[] = [];
   const searchUrl = `https://www.tripadvisor.com/Search?q=${encodeURIComponent(niche + ' ' + location)}`;
-  
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ userAgent: DEFAULT_USER_AGENT });
-  const page = await context.newPage();
 
   try {
+    const context = await browser.newContext({ userAgent: DEFAULT_USER_AGENT });
+    const page = await context.newPage();
+
     logCallback(`Navigating to TripAdvisor search...`);
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
@@ -294,13 +367,18 @@ export async function scrapeZillow(
   }
 
   logCallback(`Launching Playwright browser for Zillow...`);
+  
+  const browser = await safeLaunchBrowser(logCallback);
+  if (!browser) {
+    return scrapeHttpSearchFallback(niche, location, 'Zillow', maxResults, logCallback);
+  }
+
   const searchUrl = `https://www.zillow.com/professionals/real-estate-agent-reviews/${encodeURIComponent(location.split(',')[0])}/`;
   
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ userAgent: DEFAULT_USER_AGENT });
-  const page = await context.newPage();
-
   try {
+    const context = await browser.newContext({ userAgent: DEFAULT_USER_AGENT });
+    const page = await context.newPage();
+
     logCallback(`Navigating to Zillow Agent Finder...`);
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
@@ -357,13 +435,17 @@ export async function scrapeLinkedIn(
   }
 
   logCallback(`Launching Playwright browser with authenticated session for LinkedIn...`);
+  
+  const browser = await safeLaunchBrowser(logCallback);
+  if (!browser) {
+    return scrapeHttpSearchFallback(niche, location, 'LinkedIn', maxResults, logCallback);
+  }
+
   const searchUrl = `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(niche + ' ' + location)}`;
   const results: ScrapedBusiness[] = [];
 
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ userAgent: DEFAULT_USER_AGENT });
-
   try {
+    const context = await browser.newContext({ userAgent: DEFAULT_USER_AGENT });
     logCallback(`Injecting authentication cookie for LinkedIn...`);
     await context.addCookies([{
       name: 'li_at',
