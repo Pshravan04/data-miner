@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { scrapeGoogleMaps, scrapeYellowPages, scrapeYelp, scrapeTripAdvisor, scrapeZillow, scrapeLinkedIn, scrapeApollo, ScrapedBusiness } from './scraper';
 
+export const maxDuration = 60;
+
 export const jobsStore: Record<string, any> = {};
 
 export async function POST(request: Request) {

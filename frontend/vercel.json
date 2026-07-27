@@ -1,9 +1,3 @@
 {
-  "version": 2,
-  "framework": "nextjs",
-  "functions": {
-    "src/app/api/jobs/route.ts": {
-      "maxDuration": 60
-    }
-  }
+  "framework": "nextjs"
 }

@@ -1,4 +1,3 @@
-import { chromium } from 'playwright';
 import * as cheerio from 'cheerio';
 
 export interface ScrapedBusiness {
@@ -21,6 +20,7 @@ const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
  */
 async function safeLaunchBrowser(logCallback: (msg: string) => void) {
   try {
+    const { chromium } = await import('playwright');
     return await chromium.launch({ 
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
