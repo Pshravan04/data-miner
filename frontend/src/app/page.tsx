@@ -12,9 +12,9 @@ export default function Home() {
   
   // Platform selection (Supporting 20-30 platforms eventually)
   const availablePlatforms = [
-    'Google Maps', 'Apollo', 'Yelp', 'Zillow', 'LinkedIn', 'YellowPages', 'TripAdvisor'
+    'All Platforms', 'Google Maps', 'YellowPages', 'Yelp', 'TripAdvisor', 'Zillow', 'LinkedIn', 'Apollo'
   ];
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['Google Maps', 'Apollo']);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['All Platforms']);
 
   // Job State
   const [jobId, setJobId] = useState<string | null>(null);
@@ -24,9 +24,17 @@ export default function Home() {
   const [resultData, setResultData] = useState<any[] | null>(null);
 
   const togglePlatform = (p: string) => {
-    setSelectedPlatforms(prev => 
-      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
-    );
+    if (p === 'All Platforms') {
+      setSelectedPlatforms(['All Platforms']);
+      return;
+    }
+
+    setSelectedPlatforms(prev => {
+      const filtered = prev.filter(x => x !== 'All Platforms');
+      return filtered.includes(p) 
+        ? filtered.filter(x => x !== p) 
+        : [...filtered, p];
+    });
   };
 
   const startJob = async (e: React.FormEvent) => {

@@ -3,9 +3,9 @@ import { jobsStore } from '../store';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const jobId = params.id;
+  const { id: jobId } = await params;
 
   if (!jobId || !jobsStore[jobId]) {
     return NextResponse.json({ error: 'Job not found' }, { status: 404 });

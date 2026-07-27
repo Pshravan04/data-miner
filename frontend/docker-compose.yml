@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  data-miner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: data-miner-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - LINKEDIN_COOKIE=${LINKEDIN_COOKIE:-}
+      - APOLLO_TOKEN=${APOLLO_TOKEN:-}
+    restart: unless-stopped

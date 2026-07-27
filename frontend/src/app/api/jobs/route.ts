@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { scrapeGoogleMaps, scrapeYellowPages, scrapeYelp, scrapeTripAdvisor, scrapeZillow, scrapeLinkedIn, scrapeApollo } from './scraper';
+import { scrapeGoogleMaps, scrapeYellowPages, scrapeYelp, scrapeTripAdvisor, scrapeZillow, scrapeLinkedIn, scrapeApollo, ScrapedBusiness } from './scraper';
 
 const jobsStore: Record<string, any> = {};
 
@@ -26,6 +26,52 @@ export async function POST(request: Request) {
   }
 }
 
+/**
+ * Merges lead profiles found across multiple platform scrapers.
+ * Groups by normalized business name or phone number, combines missing contact details,
+ * and sets the Source field to a multi-source list (e.g., "Google Maps, YellowPages, Yelp").
+ */
+function mergeAndDeduplicateLeads(leads: ScrapedBusiness[]): ScrapedBusiness[] {
+  const mergedMap = new Map<string, ScrapedBusiness>();
+
+  for (const item of leads) {
+    if (!item || !item.Name || item.Name === 'Unknown Name') continue;
+
+    // Create clean key for deduplication
+    const cleanName = item.Name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanPhone = item.Phone && item.Phone !== 'N/A' ? item.Phone.replace(/[^0-9]/g, '') : '';
+    
+    const key = (cleanPhone && cleanPhone.length > 7) ? cleanPhone : cleanName;
+
+    if (!mergedMap.has(key)) {
+      mergedMap.set(key, { ...item });
+    } else {
+      const existing = mergedMap.get(key)!;
+
+      // Combine unique sources (e.g., "Google Maps, YellowPages, Yelp")
+      const sourcesSet = new Set(existing.Source.split(',').map(s => s.trim()).filter(Boolean));
+      item.Source.split(',').map(s => s.trim()).filter(Boolean).forEach(s => sourcesSet.add(s));
+      existing.Source = Array.from(sourcesSet).join(', ');
+
+      // Fill in missing contact data from alternate platforms
+      if ((!existing.Phone || existing.Phone === 'N/A') && item.Phone && item.Phone !== 'N/A') {
+        existing.Phone = item.Phone;
+      }
+      if ((!existing.Website || existing.Website === 'N/A') && item.Website && item.Website !== 'N/A') {
+        existing.Website = item.Website;
+      }
+      if ((!existing.Email || existing.Email === 'N/A') && item.Email && item.Email !== 'N/A') {
+        existing.Email = item.Email;
+      }
+      if ((!existing.Ratings || existing.Ratings === 'N/A') && item.Ratings && item.Ratings !== 'N/A') {
+        existing.Ratings = item.Ratings;
+      }
+    }
+  }
+
+  return Array.from(mergedMap.values());
+}
+
 async function runAgentCrew(jobId: string, niche: string, location: string, platforms: string[], maxResults: number) {
   const log = (msg: string) => {
     jobsStore[jobId].logs.push(msg);
@@ -34,11 +80,13 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
   };
 
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    log(`Search Agent: Formulating search strategy for ${niche} in ${location}...`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    log(`Search Agent: Formulating multi-source search strategy for ${niche} in ${location}...`);
     
+    let rawLeads: ScrapedBusiness[] = [];
+
     if (platforms.includes('All Platforms')) {
-      log(`Triggering headless Playwright browsers to scrape multiple platforms in parallel...`);
+      log(`Triggering scrapers across all supported platforms in parallel...`);
       
       const [mapsData, ypData, yelpData, taData, zillowData, liData, apolloData] = await Promise.all([
         scrapeGoogleMaps(niche, location, maxResults, log),
@@ -50,36 +98,37 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
         scrapeApollo(niche, location, maxResults, log)
       ]);
       
-      // Interleave results (1 from each platform, repeat)
-      const interleaved = [];
-      const maxLength = Math.max(mapsData.length, ypData.length, yelpData.length, taData.length, zillowData.length, liData.length, apolloData.length);
-      for (let i = 0; i < maxLength; i++) {
-        if (mapsData[i]) interleaved.push(mapsData[i]);
-        if (ypData[i]) interleaved.push(ypData[i]);
-        if (yelpData[i]) interleaved.push(yelpData[i]);
-        if (taData[i]) interleaved.push(taData[i]);
-        if (zillowData[i]) interleaved.push(zillowData[i]);
-        if (liData[i]) interleaved.push(liData[i]);
-        if (apolloData[i]) interleaved.push(apolloData[i]);
-      }
-      
-      jobsStore[jobId].resultData = interleaved;
-    } else if (platforms.includes('Google Maps')) {
-      log(`Triggering headless Playwright browser to scrape Google Maps...`);
-      const scrapedData = await scrapeGoogleMaps(niche, location, maxResults, log);
-      jobsStore[jobId].resultData = scrapedData;
-    } else if (platforms.includes('YellowPages')) {
-      log(`Triggering headless Playwright browser to scrape YellowPages...`);
-      const scrapedData = await scrapeYellowPages(niche, location, maxResults, log);
-      jobsStore[jobId].resultData = scrapedData;
+      rawLeads = [
+        ...mapsData, 
+        ...ypData, 
+        ...yelpData, 
+        ...taData, 
+        ...zillowData, 
+        ...liData, 
+        ...apolloData
+      ];
     } else {
-      log(`Fallback: Only Google Maps is implemented for the free local scraper right now.`);
-      jobsStore[jobId].resultData = [];
+      log(`Triggering scrapers for selected platforms: ${platforms.join(', ')}...`);
+      const tasks: Promise<ScrapedBusiness[]>[] = [];
+      if (platforms.includes('Google Maps')) tasks.push(scrapeGoogleMaps(niche, location, maxResults, log));
+      if (platforms.includes('YellowPages')) tasks.push(scrapeYellowPages(niche, location, maxResults, log));
+      if (platforms.includes('Yelp')) tasks.push(scrapeYelp(niche, location, maxResults, log));
+      if (platforms.includes('TripAdvisor')) tasks.push(scrapeTripAdvisor(niche, location, maxResults, log));
+      if (platforms.includes('Zillow')) tasks.push(scrapeZillow(niche, location, maxResults, log));
+      if (platforms.includes('LinkedIn')) tasks.push(scrapeLinkedIn(niche, location, maxResults, log));
+      if (platforms.includes('Apollo')) tasks.push(scrapeApollo(niche, location, maxResults, log));
+
+      const platformResults = await Promise.all(tasks);
+      rawLeads = platformResults.flat();
     }
 
+    log(`Deduplicating and merging sources for ${rawLeads.length} raw leads...`);
+    const mergedLeads = mergeAndDeduplicateLeads(rawLeads);
+
+    jobsStore[jobId].resultData = mergedLeads;
     jobsStore[jobId].status = 'completed';
     jobsStore[jobId].progress = 'Job completed successfully.';
-    log('Process finished successfully.');
+    log(`Process finished successfully. Extracted ${mergedLeads.length} unique enriched leads with full source mapping.`);
 
   } catch (error: any) {
     jobsStore[jobId].status = 'failed';
