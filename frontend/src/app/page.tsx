@@ -42,7 +42,7 @@ export default function Home() {
     if (selectedPlatforms.length === 0) return alert("Select at least one platform");
     
     setStatus('processing');
-    setLogs([]);
+    setLogs(['Initializing request...']);
     setProgress('Starting job...');
     setResultData(null);
 
@@ -50,16 +50,24 @@ export default function Home() {
       const res = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ niche, location, platforms: selectedPlatforms, maxResults })
+        body: JSON.stringify({ 
+          niche: niche.trim() || 'Businesses', 
+          location: location.trim() || 'Global', 
+          platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['Google Maps'], 
+          maxResults: maxResults || 50 
+        })
       });
       const data = await res.json();
-      if (data.jobId) {
+      if (res.ok && data.jobId) {
         setJobId(data.jobId);
+      } else {
+        setStatus('failed');
+        setProgress(data.error || 'Server error starting extraction job.');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Job submission error:', err);
       setStatus('failed');
-      setProgress('Failed to start job.');
+      setProgress(`Failed to start job: ${err.message || 'Network error'}`);
     }
   };
 

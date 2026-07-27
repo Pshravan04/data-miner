@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { scrapeGoogleMaps, scrapeYellowPages, scrapeYelp, scrapeTripAdvisor, scrapeZillow, scrapeLinkedIn, scrapeApollo, ScrapedBusiness } from './scraper';
 
-const jobsStore: Record<string, any> = {};
+export const jobsStore: Record<string, any> = {};
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { niche, location, platforms, maxResults } = body;
+    const body = await request.json().catch(() => ({}));
+    const niche = (body.niche && String(body.niche).trim()) || 'Businesses';
+    const location = (body.location && String(body.location).trim()) || 'Global';
+    const platforms = Array.isArray(body.platforms) && body.platforms.length > 0 ? body.platforms : ['Google Maps'];
+    const maxResults = typeof body.maxResults === 'number' && body.maxResults > 0 ? body.maxResults : 50;
 
     const jobId = Math.random().toString(36).substring(2, 15);
     
@@ -14,15 +17,17 @@ export async function POST(request: Request) {
       id: jobId,
       status: 'processing',
       progress: 'Initializing agent crew...',
-      logs: ['Job started'],
+      logs: ['Job initialized successfully.'],
       resultData: null
     };
 
+    // Run scraping in background
     runAgentCrew(jobId, niche, location, platforms, maxResults);
 
     return NextResponse.json({ jobId, status: 'processing' });
-  } catch (error) {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  } catch (error: any) {
+    console.error('Error starting job:', error);
+    return NextResponse.json({ error: error.message || 'Failed to initialize extraction job.' }, { status: 500 });
   }
 }
 
@@ -74,13 +79,15 @@ function mergeAndDeduplicateLeads(leads: ScrapedBusiness[]): ScrapedBusiness[] {
 
 async function runAgentCrew(jobId: string, niche: string, location: string, platforms: string[], maxResults: number) {
   const log = (msg: string) => {
-    jobsStore[jobId].logs.push(msg);
-    jobsStore[jobId].progress = msg;
+    if (jobsStore[jobId]) {
+      jobsStore[jobId].logs.push(msg);
+      jobsStore[jobId].progress = msg;
+    }
     console.log(`[Job ${jobId}] ${msg}`);
   };
 
   try {
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 300));
     log(`Search Agent: Formulating multi-source search strategy for ${niche} in ${location}...`);
     
     let rawLeads: ScrapedBusiness[] = [];
@@ -125,14 +132,18 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
     log(`Deduplicating and merging sources for ${rawLeads.length} raw leads...`);
     const mergedLeads = mergeAndDeduplicateLeads(rawLeads);
 
-    jobsStore[jobId].resultData = mergedLeads;
-    jobsStore[jobId].status = 'completed';
-    jobsStore[jobId].progress = 'Job completed successfully.';
+    if (jobsStore[jobId]) {
+      jobsStore[jobId].resultData = mergedLeads;
+      jobsStore[jobId].status = 'completed';
+      jobsStore[jobId].progress = 'Job completed successfully.';
+    }
     log(`Process finished successfully. Extracted ${mergedLeads.length} unique enriched leads with full source mapping.`);
 
   } catch (error: any) {
-    jobsStore[jobId].status = 'failed';
-    jobsStore[jobId].progress = `Error: ${error.message}`;
+    if (jobsStore[jobId]) {
+      jobsStore[jobId].status = 'failed';
+      jobsStore[jobId].progress = `Error: ${error.message}`;
+    }
     log(`Error: ${error.message}`);
   }
 }
