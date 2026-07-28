@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Download, Play, CheckCircle2, AlertCircle, TerminalSquare } from 'lucide-react';
+import { Download, Play, CheckCircle2, AlertCircle, TerminalSquare, Globe, Phone, Mail, Star, Layers } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function Home() {
@@ -10,7 +10,7 @@ export default function Home() {
   const [location, setLocation] = useState('');
   const [maxResults, setMaxResults] = useState(50);
   
-  // Platform selection (Supporting 20-30 platforms eventually)
+  // Platform selection
   const availablePlatforms = [
     'All Platforms', 'Google Maps', 'YellowPages', 'Yelp', 'TripAdvisor', 'Zillow', 'LinkedIn', 'Apollo'
   ];
@@ -63,7 +63,9 @@ export default function Home() {
         if (data.status) setStatus(data.status);
         if (data.progress) setProgress(data.progress);
         if (data.logs) setLogs(data.logs);
-        if (data.resultData) setResultData(data.resultData);
+        if (data.resultData && Array.isArray(data.resultData)) {
+          setResultData(data.resultData);
+        }
       } else {
         setStatus('failed');
         setProgress(data.error || 'Server error starting extraction job.');
@@ -86,7 +88,7 @@ export default function Home() {
             setStatus(data.status);
             setProgress(data.progress || '');
             setLogs(data.logs || []);
-            if (data.resultData) {
+            if (data.resultData && Array.isArray(data.resultData)) {
               setResultData(data.resultData);
             }
           }
@@ -99,11 +101,27 @@ export default function Home() {
   }, [jobId, status]);
 
   const downloadExcel = () => {
-    if (!resultData) return;
-    const worksheet = XLSX.utils.json_to_sheet(resultData);
+    if (!resultData || resultData.length === 0) return alert("No lead data available to download.");
+    
+    // Explicitly format column headers for clean spreadsheet layout
+    const formattedData = resultData.map(item => ({
+      'Business Name': item.Name || 'N/A',
+      'Target Niche': item.Niche || niche || 'N/A',
+      'Location': item.Location || location || 'N/A',
+      'Phone Number': item.Phone || 'N/A',
+      'Email Address': item.Email || 'N/A',
+      'Website': item.Website || 'N/A',
+      'Rating': item.Ratings || 'N/A',
+      'Source Platforms': item.Source || 'N/A'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(formattedData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
-    XLSX.writeFile(workbook, `Leads_${niche}_${location}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Enriched Leads");
+    
+    const cleanNiche = (niche || 'Leads').replace(/[^a-zA-Z0-9]/g, '_');
+    const cleanLoc = (location || 'Global').replace(/[^a-zA-Z0-9]/g, '_');
+    XLSX.writeFile(workbook, `Leads_${cleanNiche}_${cleanLoc}.xlsx`);
   };
 
   return (
@@ -114,7 +132,7 @@ export default function Home() {
         <header className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Multi-Agent Lead Scraper</h1>
-            <p className="text-gray-500 mt-2">Extract enriched data from 20+ platforms simultaneously using AI agents.</p>
+            <p className="text-gray-500 mt-2">Extract enriched B2B data from 20+ platforms simultaneously using AI agents.</p>
           </div>
           <div className="hidden md:flex gap-2">
             <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">Bypass Anti-Bot</span>
@@ -301,22 +319,22 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Results Actions */}
+            {/* Results Action Banner */}
             {status === 'completed' && (
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-green-100 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex items-center gap-3 text-green-700">
-                  <CheckCircle2 className="w-8 h-8" />
+                  <CheckCircle2 className="w-8 h-8 shrink-0" />
                   <div>
                     <h3 className="font-bold text-lg">Extraction Complete!</h3>
-                    <p className="text-sm opacity-80">Successfully extracted and enriched {resultData?.length} leads.</p>
+                    <p className="text-sm opacity-80">Successfully extracted and enriched {resultData?.length || 0} leads with full source mapping.</p>
                   </div>
                 </div>
                 <button
                   onClick={downloadExcel}
-                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold flex items-center gap-2 transition-all shrink-0"
+                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold flex items-center gap-2 transition-all shrink-0 shadow-md"
                 >
                   <Download className="w-5 h-5" />
-                  Download Excel
+                  Download Excel (.xlsx)
                 </button>
               </div>
             )}
@@ -327,6 +345,67 @@ export default function Home() {
                 <div>
                   <h3 className="font-bold">Extraction Failed</h3>
                   <p className="text-sm">{progress}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Extracted Leads Data Grid Table */}
+            {resultData && resultData.length > 0 && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-blue-600" />
+                    <h3 className="font-bold text-gray-900 text-lg">Extracted Lead Profiles ({resultData.length})</h3>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full">Source Verified</span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm text-gray-600">
+                    <thead className="bg-gray-50 text-gray-700 uppercase text-xs font-semibold">
+                      <tr>
+                        <th className="px-4 py-3">Business Name</th>
+                        <th className="px-4 py-3">Phone</th>
+                        <th className="px-4 py-3">Website</th>
+                        <th className="px-4 py-3">Rating</th>
+                        <th className="px-4 py-3">Sources</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {resultData.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-semibold text-gray-900 max-w-[200px] truncate">{item.Name}</td>
+                          <td className="px-4 py-3 text-xs whitespace-nowrap">
+                            <span className="flex items-center gap-1.5 text-gray-700">
+                              <Phone className="w-3.5 h-3.5 text-gray-400" />
+                              {item.Phone || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs max-w-[160px] truncate">
+                            {item.Website && item.Website !== 'N/A' ? (
+                              <a href={item.Website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
+                                <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                {item.Website.replace(/^https?:\/\//, '')}
+                              </a>
+                            ) : (
+                              <span className="text-gray-400">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-xs whitespace-nowrap">
+                            <span className="flex items-center gap-1 text-amber-600 font-medium">
+                              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                              {item.Ratings || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className="inline-block bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded border border-blue-100">
+                              {item.Source || 'N/A'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
