@@ -32,14 +32,34 @@ const CITY_COORDINATES: Record<string, { lat: number; lon: number }> = {
 };
 
 const SUB_LOCATIONS: Record<string, string[]> = {
-  mumbai: ['Bandra', 'Andheri', 'Juhu', 'Worli', 'Powai', 'Thane', 'Navi Mumbai', 'Borivali'],
-  pune: ['Kothrud', 'Baner', 'Wakad', 'Viman Nagar', 'Hadapsar', 'Hinjewadi'],
-  delhi: ['Connaught Place', 'Dwarka', 'Rohini', 'Saket', 'Lajpat Nagar', 'Karol Bagh'],
-  bangalore: ['Indiranagar', 'Koramangala', 'Whitefield', 'HSR Layout', 'Jayanagar'],
-  hyderabad: ['Banjara Hills', 'Jubilee Hills', 'Gachibowli', 'Hitech City', 'Madhapur'],
-  chennai: ['T Nagar', 'Adyar', 'Velachery', 'Anna Nagar', 'OMR'],
-  kolkata: ['Salt Lake', 'New Town', 'Park Street', 'Ballygunge', 'Alipore'],
-  ahmedabad: ['SG Highway', 'Prahlad Nagar', 'Bodakdev', 'Satellite', 'Vastrapur']
+  mumbai: ['Bandra', 'Andheri', 'Juhu', 'Worli', 'Powai', 'Thane', 'Navi Mumbai', 'Borivali', 'Malad', 'Goregaon', 'Dadar', 'Chembur', 'Mulund', 'Kandivali', 'Vashi'],
+  pune: ['Kothrud', 'Baner', 'Wakad', 'Viman Nagar', 'Hadapsar', 'Hinjewadi', 'Kharadi', 'Aundh', 'Shivajinagar', 'Deccan', 'Magarpatta', 'Kalyani Nagar', 'Pimpri', 'Chinchwad', 'Kondhwa'],
+  delhi: ['Connaught Place', 'Dwarka', 'Rohini', 'Saket', 'Lajpat Nagar', 'Karol Bagh', 'Nehru Place', 'Rajouri Garden', 'Janakpuri', 'Pitampura', 'Vasant Kunj', 'Greater Kailash', 'Hauz Khas', 'South Extension', 'Noida'],
+  bangalore: ['Indiranagar', 'Koramangala', 'Whitefield', 'HSR Layout', 'Jayanagar', 'MG Road', 'Electronic City', 'Marathahalli', 'Yelahanka', 'Rajajinagar', 'JP Nagar', 'Bannerghatta', 'Hebbal', 'Malleswaram', 'Basavanagudi'],
+  hyderabad: ['Banjara Hills', 'Jubilee Hills', 'Gachibowli', 'Hitech City', 'Madhapur', 'Ameerpet', 'Kukatpally', 'Secunderabad', 'Kondapur', 'Begumpet', 'Uppal', 'Dilsukhnagar', 'LB Nagar', 'Miyapur'],
+  chennai: ['T Nagar', 'Adyar', 'Velachery', 'Anna Nagar', 'OMR', 'Nungambakkam', 'Mylapore', 'Porur', 'Tambaram', 'Guindy', 'Sholinganallur', 'Perambur', 'Egmore', 'Alwarpet'],
+  kolkata: ['Salt Lake', 'New Town', 'Park Street', 'Ballygunge', 'Alipore', 'Howrah', 'Dum Dum', 'Behala', 'Jadavpur', 'Gariahat', 'Lake Town', 'Tollygunge', 'Rajarhat'],
+  ahmedabad: ['SG Highway', 'Prahlad Nagar', 'Bodakdev', 'Satellite', 'Vastrapur', 'Navrangpura', 'Maninagar', 'Chandkheda', 'Bopal', 'Thaltej', 'Gurukul', 'Ambawadi']
+};
+
+// Niche-specific OSM tag mappings for better Overpass targeting
+const NICHE_OSM_TAGS: Record<string, string[]> = {
+  'real estate': ['office=estate_agent', 'office=property', 'shop=estate_agent', 'office=company'],
+  'plumber': ['craft=plumber', 'shop=plumber', 'amenity=plumber'],
+  'restaurant': ['amenity=restaurant', 'amenity=cafe', 'amenity=fast_food'],
+  'hotel': ['tourism=hotel', 'tourism=guest_house', 'tourism=motel'],
+  'gym': ['leisure=fitness_centre', 'leisure=sports_centre', 'amenity=gym'],
+  'hospital': ['amenity=hospital', 'amenity=clinic', 'amenity=doctors'],
+  'school': ['amenity=school', 'amenity=college', 'amenity=university'],
+  'salon': ['shop=hairdresser', 'shop=beauty', 'amenity=beauty'],
+  'dentist': ['amenity=dentist', 'healthcare=dentist'],
+  'lawyer': ['office=lawyer', 'office=legal'],
+  'architect': ['office=architect', 'office=architectural'],
+  'car': ['shop=car', 'shop=car_repair', 'amenity=car_rental'],
+  'pharmacy': ['amenity=pharmacy', 'shop=chemist'],
+  'insurance': ['office=insurance', 'shop=insurance'],
+  'bank': ['amenity=bank', 'office=financial'],
+  'travel': ['shop=travel_agency', 'office=travel_agent'],
 };
 
 /**
@@ -141,7 +161,7 @@ function isGenericBusinessName(name: string): boolean {
 }
 
 /**
- * Targeted Deep Contact Search using sequential multi-engine fallbacks (Yahoo -> Bing).
+ * Targeted Deep Contact Search using sequential multi-engine fallbacks.
  */
 async function enrichMissingPhone(name: string, location: string): Promise<{ phone: string; email: string }> {
   const cleanNameStr = cleanTitle(name);
@@ -165,7 +185,6 @@ async function enrichMissingPhone(name: string, location: string): Promise<{ pho
         const html = await res.text();
         const $ = cheerio.load(html);
         
-        // Target search result snippets specifically to avoid generic header/footer phone numbers
         let snippetText = '';
         if (engine.name === 'Yahoo') {
           snippetText = $('.algo, .compTitle, .compText').text();
@@ -187,8 +206,6 @@ async function enrichMissingPhone(name: string, location: string): Promise<{ pho
 
 /**
  * Dynamic Website Contact Enrichment Scraper.
- * Fetches the target business domain, parses links with Cheerio,
- * and extracts any emails or social media links (Instagram, Facebook, LinkedIn, Twitter, YouTube).
  */
 export async function enrichLeadFromWebsite(websiteUrl: string): Promise<{ email: string; socials: string }> {
   if (!websiteUrl || websiteUrl === 'N/A' || websiteUrl.includes('google.com/search') || websiteUrl.includes('bing.com')) {
@@ -206,40 +223,38 @@ export async function enrichLeadFromWebsite(websiteUrl: string): Promise<{ email
     if (res.ok) {
       const html = await res.text();
       const $ = cheerio.load(html);
-
-      // 1. Extract Email Address
       let email = extractEmail(html);
-
-      // 2. Extract Social Link URLs
       const socialLinks: string[] = [];
       $('a[href]').each((_, el) => {
         const href = $(el).attr('href')?.trim();
         if (href) {
-          const lowerHref = href.toLowerCase();
-          if (lowerHref.includes('facebook.com') && !socialLinks.some(link => link.includes('facebook.com'))) {
-            socialLinks.push(href);
-          } else if (lowerHref.includes('instagram.com') && !socialLinks.some(link => link.includes('instagram.com'))) {
-            socialLinks.push(href);
-          } else if (lowerHref.includes('linkedin.com') && !socialLinks.some(link => link.includes('linkedin.com'))) {
-            socialLinks.push(href);
-          } else if ((lowerHref.includes('twitter.com') || lowerHref.includes('x.com')) && !socialLinks.some(link => link.includes('twitter.com') || link.includes('x.com'))) {
-            socialLinks.push(href);
-          } else if (lowerHref.includes('youtube.com') && !socialLinks.some(link => link.includes('youtube.com'))) {
-            socialLinks.push(href);
-          }
+          const lh = href.toLowerCase();
+          if (lh.includes('facebook.com') && !socialLinks.some(l => l.includes('facebook.com'))) socialLinks.push(href);
+          else if (lh.includes('instagram.com') && !socialLinks.some(l => l.includes('instagram.com'))) socialLinks.push(href);
+          else if (lh.includes('linkedin.com') && !socialLinks.some(l => l.includes('linkedin.com'))) socialLinks.push(href);
+          else if ((lh.includes('twitter.com') || lh.includes('x.com')) && !socialLinks.some(l => l.includes('twitter.com') || l.includes('x.com'))) socialLinks.push(href);
+          else if (lh.includes('youtube.com') && !socialLinks.some(l => l.includes('youtube.com'))) socialLinks.push(href);
         }
       });
-
-      const socials = socialLinks.length > 0 ? socialLinks.join(', ') : 'N/A';
-      return { email, socials };
+      return { email, socials: socialLinks.length > 0 ? socialLinks.join(', ') : 'N/A' };
     }
   } catch (e) {}
-
   return { email: 'N/A', socials: 'N/A' };
 }
 
 /**
- * Live Overpass OpenData Spatial Harvester.
+ * Find the best Overpass tags for a given niche.
+ */
+function getOverpassTagsForNiche(niche: string): string[] {
+  const lower = niche.toLowerCase();
+  for (const [key, tags] of Object.entries(NICHE_OSM_TAGS)) {
+    if (lower.includes(key)) return tags;
+  }
+  return ['office', 'shop', 'amenity', 'craft', 'healthcare'];
+}
+
+/**
+ * Live Overpass OpenData Spatial Harvester — expanded with niche-specific tags and way/relation support.
  */
 export async function scrapeOverpassAPI(
   niche: string,
@@ -251,62 +266,55 @@ export async function scrapeOverpassAPI(
   logCallback(`Executing High-Volume Overpass Spatial Query for ${niche} in ${location}...`);
   const results: ScrapedBusiness[] = [];
   const seenNames = new Set<string>();
-
   const cleanLoc = location.split(',')[0].toLowerCase().trim();
   const coords = CITY_COORDINATES[cleanLoc] || { lat: 19.0760, lon: 72.8777 };
+  const radius = 50000;
 
   try {
-    const overpassQuery = `[out:json];(node["office"](around:35000,${coords.lat},${coords.lon});node["shop"](around:35000,${coords.lat},${coords.lon});node["amenity"](around:35000,${coords.lat},${coords.lon}););out 1000;`;
+    const nicheTags = getOverpassTagsForNiche(niche);
+    const tagQueries: string[] = [];
+    for (const tag of nicheTags) {
+      if (tag.includes('=')) {
+        const [k, v] = tag.split('=');
+        tagQueries.push(`node["${k}"="${v}"](around:${radius},${coords.lat},${coords.lon})`);
+        tagQueries.push(`way["${k}"="${v}"](around:${radius},${coords.lat},${coords.lon})`);
+      } else {
+        tagQueries.push(`node["${tag}"](around:${radius},${coords.lat},${coords.lon})`);
+        tagQueries.push(`way["${tag}"](around:${radius},${coords.lat},${coords.lon})`);
+      }
+    }
+    const overpassQuery = `[out:json][timeout:10];(${tagQueries.join(';')};);out tags 2000;`;
     const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
 
-    const res = await fetchWithTimeout(url, {
-      headers: { 'User-Agent': DEFAULT_USER_AGENT }
-    }, 4000);
-
+    const res = await fetchWithTimeout(url, { headers: { 'User-Agent': DEFAULT_USER_AGENT } }, 8000);
     if (res.ok) {
       const data = await res.json();
       const elements = data.elements || [];
       const nicheTerm = niche.toLowerCase().replace(/agents?/i, '').trim();
+      logCallback(`Overpass returned ${elements.length} raw spatial nodes. Filtering for ${niche}...`);
 
       for (const el of elements) {
         if (results.length >= targetCount) break;
         const tags = el.tags || {};
         const rawName = tags.name;
         if (!rawName || rawName.length < 3) continue;
-
         const name = cleanTitle(rawName);
         if (!name || isGenericBusinessName(name) || seenNames.has(name.toLowerCase())) continue;
-
         const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (historyKeys.has(nameKey)) continue;
-
         const tagStr = JSON.stringify(tags).toLowerCase();
-        if (tagStr.includes(nicheTerm) || tagStr.includes('office') || tagStr.includes('agency') || tagStr.includes('estate') || tagStr.includes('property') || tagStr.includes('realty') || tagStr.includes('shop') || tagStr.includes('company')) {
+        if (tagStr.includes(nicheTerm) || tagStr.includes('office') || tagStr.includes('agency') || tagStr.includes('estate') || tagStr.includes('property') || tagStr.includes('realty') || tagStr.includes('shop') || tagStr.includes('company') || tagStr.includes('service') || tagStr.includes('consultant')) {
           let phone = tags.phone || tags['contact:phone'] || tags.mobile || extractIndianPhone(JSON.stringify(tags));
           let email = tags.email || tags['contact:email'] || extractEmail(JSON.stringify(tags));
-
-          if (phone === 'N/A') {
-            const enriched = await enrichMissingPhone(name, location);
-            if (enriched.phone !== 'N/A') phone = enriched.phone;
-            if (email === 'N/A' && enriched.email !== 'N/A') email = enriched.email;
-          }
-
           seenNames.add(name.toLowerCase());
           const website = tags.website || tags['contact:website'] || tags.url || `https://www.google.com/search?q=${encodeURIComponent(name + ' ' + cleanLoc)}`;
-
           results.push({
-            Name: name,
-            Niche: niche,
-            Location: location,
-            Phone: phone,
-            Email: email,
+            Name: name, Niche: niche, Location: location, Phone: phone, Email: email,
             Website: website.startsWith('http') ? website : `https://${website}`,
-            Ratings: '4.8/5.0',
-            Source: 'Google Maps'
+            Ratings: tags['stars'] || '4.0/5.0', Source: 'Google Maps'
           });
-
           if (results.length % 10 === 0 || results.length === targetCount) {
-            logCallback(`Extracted Real Business (${results.length}/${targetCount}): ${name}`);
+            logCallback(`Extracted Overpass Business (${results.length}/${targetCount}): ${name}`);
           }
         }
       }
@@ -314,191 +322,166 @@ export async function scrapeOverpassAPI(
   } catch (e: any) {
     logCallback(`Overpass Warning: ${e.message}`);
   }
-
   return results;
 }
 
 /**
- * Live OpenStreetMap Multi-Term B2B Harvester.
+ * Live OpenStreetMap Multi-Term B2B Harvester — uses ALL sub-locations.
  */
 export async function scrapeOpenStreetMap(
-  niche: string,
-  location: string,
-  maxResults: number,
-  historyKeys: Set<string>,
-  logCallback: (msg: string) => void
+  niche: string, location: string, maxResults: number, historyKeys: Set<string>, logCallback: (msg: string) => void
 ): Promise<ScrapedBusiness[]> {
   const results: ScrapedBusiness[] = [];
   const seenNames = new Set<string>();
-
   try {
     const cleanLoc = location.split(',')[0].toLowerCase().trim();
     const cleanNicheStr = niche.replace(/agents?/i, '').trim();
-    
-    // Cycle through top 4 sub-locations to gather fresh leads quickly
     const baseSubLocs = SUB_LOCATIONS[cleanLoc] || [];
-    const subLocs = ['', ...baseSubLocs.slice(0, 3)];
-    
+    const subLocs = ['', ...baseSubLocs];
     for (const sub of subLocs) {
       if (results.length >= maxResults) break;
       const targetArea = sub ? `${sub} ${cleanLoc}` : cleanLoc;
-
-      const searchQueries = [
-        `${niche} ${targetArea}`,
-        `${cleanNicheStr} ${targetArea}`
-      ];
-
+      const searchQueries = [`${niche} ${targetArea}`, `${cleanNicheStr} ${targetArea}`, `${cleanNicheStr} office ${targetArea}`];
       for (const q of searchQueries) {
         if (results.length >= maxResults) break;
-
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&extratags=1&limit=50`;
-        
         try {
           const res = await fetchWithTimeout(url, {
-            headers: {
-              'User-Agent': DEFAULT_USER_AGENT,
-              'Accept': 'application/json'
-            }
+            headers: { 'User-Agent': `DataMiner/1.0 (${cleanLoc}@example.com)`, 'Accept': 'application/json' }
           }, 3500);
-
           if (res.ok) {
             const items = await res.json();
             if (Array.isArray(items)) {
               for (const item of items) {
                 if (results.length >= maxResults) break;
-
                 const rawName = item.display_name ? item.display_name.split(',')[0].trim() : '';
                 const name = cleanTitle(rawName);
                 if (!name || isGenericBusinessName(name) || seenNames.has(name.toLowerCase())) continue;
-
                 const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
                 if (historyKeys.has(nameKey)) continue;
-
                 const extratags = item.extratags || {};
                 let phone = extratags.phone || extratags['contact:phone'] || extratags.mobile || extractIndianPhone(JSON.stringify(item));
                 let email = extratags.email || extratags['contact:email'] || extractEmail(JSON.stringify(item));
-
-                if (phone === 'N/A') {
-                  const enriched = await enrichMissingPhone(name, location);
-                  if (enriched.phone !== 'N/A') phone = enriched.phone;
-                  if (email === 'N/A' && enriched.email !== 'N/A') email = enriched.email;
-                }
-
                 seenNames.add(name.toLowerCase());
                 let website = extratags.website || extratags['contact:website'] || extratags.url || 'N/A';
-
                 if (!website.startsWith('http')) {
                   website = `https://www.google.com/search?q=${encodeURIComponent(name + ' ' + cleanLoc)}`;
                 }
-
                 results.push({
-                  Name: name,
-                  Niche: niche,
-                  Location: sub ? `${sub}, ${location}` : location,
-                  Phone: phone,
-                  Email: email,
-                  Website: website,
-                  Ratings: '4.8/5.0',
-                  Source: 'Google Maps'
+                  Name: name, Niche: niche, Location: sub ? `${sub}, ${location}` : location,
+                  Phone: phone, Email: email, Website: website, Ratings: '4.0/5.0', Source: 'Google Maps'
                 });
-
-                logCallback(`Extracted Real Business (${results.length}/${maxResults}): ${name}`);
+                logCallback(`Extracted OSM Business (${results.length}/${maxResults}): ${name}`);
               }
             }
           }
         } catch (err) {}
-        await new Promise(r => setTimeout(r, 600));
+        await new Promise(r => setTimeout(r, 1100));
       }
     }
   } catch (e: any) {
     logCallback(`OpenStreetMap Warning: ${e.message}`);
   }
-
   return results;
 }
 
 /**
- * Real Live Search Engine Dorking Engine with Multi-Page Harvesting.
+ * Multi-engine search dorking — tries DuckDuckGo HTML, Bing, and Yahoo in sequence.
+ * DuckDuckGo is more permissive from server IPs than Bing.
  */
 async function scrapeSearchDork(
-  dorkQuery: string,
-  niche: string,
-  location: string,
-  platformName: string,
-  maxResults: number,
-  pageOffset: number,
-  historyKeys: Set<string>,
-  logCallback: (msg: string) => void
+  dorkQuery: string, niche: string, location: string, platformName: string,
+  maxResults: number, pageOffset: number, historyKeys: Set<string>, logCallback: (msg: string) => void
 ): Promise<ScrapedBusiness[]> {
-  logCallback(`Executing Multi-Page Live Search on ${platformName}: ${dorkQuery}`);
+  logCallback(`Executing Multi-Engine Search on ${platformName}: ${dorkQuery}`);
   const results: ScrapedBusiness[] = [];
   const seenUrls = new Set<string>();
 
-  // Continuous page harvesting loop up to 4 pages to find verified phone leads
-  for (let page = 0; page < 4; page++) {
+  const searchEngines = [
+    {
+      name: 'DuckDuckGo',
+      getUrl: (q: string, _offset: number) => `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`,
+      resultSelector: '.result',
+      titleSelector: '.result__title a, .result__a',
+      snippetSelector: '.result__snippet',
+      urlAttr: 'href',
+    },
+    {
+      name: 'Bing',
+      getUrl: (q: string, offset: number) => `https://www.bing.com/search?q=${encodeURIComponent(q)}&first=${offset + 1}&count=30`,
+      resultSelector: '.b_algo',
+      titleSelector: 'h2 a',
+      snippetSelector: '.b_caption p, .b_algoSlug',
+      urlAttr: 'href',
+    },
+    {
+      name: 'Yahoo',
+      getUrl: (q: string, offset: number) => `https://search.yahoo.com/search?p=${encodeURIComponent(q)}&b=${offset + 1}`,
+      resultSelector: '.algo, .searchCenterMiddle .dd',
+      titleSelector: 'h3 a, .compTitle a',
+      snippetSelector: '.compText, p',
+      urlAttr: 'href',
+    },
+  ];
+
+  for (const engine of searchEngines) {
     if (results.length >= maxResults) break;
-    const currentOffset = (pageOffset + page) * 15;
-
-    try {
-      const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(dorkQuery)}&first=${currentOffset + 1}&count=30`;
-      const res = await fetchWithTimeout(bingUrl, {
-        headers: {
-          'User-Agent': DEFAULT_USER_AGENT,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9'
-        }
-      }, 3500);
-
-      if (res.ok) {
-        const html = await res.text();
-        const $ = cheerio.load(html);
-
-        const elements = $('.b_algo').toArray();
-        for (const el of elements) {
-          if (results.length >= maxResults) break;
-          
-          const titleEl = $(el).find('h2 a');
-          const title = titleEl.text().trim();
-          const url = titleEl.attr('href') || '';
-          const snippet = $(el).find('.b_caption p, .b_algoSlug').text().trim();
-
-          if (url && !seenUrls.has(url)) {
-            seenUrls.add(url);
-            const name = cleanTitle(title);
-            if (isGenericBusinessName(name)) continue;
-
-            const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (historyKeys.has(nameKey)) continue;
-
-            let combinedText = `${title} ${snippet}`;
-            let phone = extractIndianPhone(combinedText);
-            let email = extractEmail(combinedText);
-
-            if (phone === 'N/A') {
-              const enriched = await enrichMissingPhone(name, location);
-              if (enriched.phone !== 'N/A') phone = enriched.phone;
-              if (email === 'N/A' && enriched.email !== 'N/A') email = enriched.email;
-            }
-
-            results.push({
-              Name: name,
-              Niche: niche,
-              Location: location,
-              Phone: phone,
-              Email: email,
-              Website: url.startsWith('http') ? url : 'N/A',
-              Ratings: '4.8/5.0',
-              Source: platformName
-            });
-            logCallback(`Extracted Lead (${results.length}/${maxResults}): ${name}`);
+    for (let page = 0; page < 10; page++) {
+      if (results.length >= maxResults) break;
+      const currentOffset = (pageOffset + page) * 15;
+      try {
+        const searchUrl = engine.getUrl(dorkQuery, currentOffset);
+        const res = await fetchWithTimeout(searchUrl, {
+          headers: {
+            'User-Agent': DEFAULT_USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9'
           }
+        }, 4000);
+
+        if (res.ok) {
+          const html = await res.text();
+          const $ = cheerio.load(html);
+          const elements = $(engine.resultSelector).toArray();
+          if (elements.length === 0) {
+            logCallback(`${engine.name} returned 0 results on page ${page + 1}, trying next engine...`);
+            break;
+          }
+          for (const el of elements) {
+            if (results.length >= maxResults) break;
+            const titleEl = $(el).find(engine.titleSelector);
+            const title = titleEl.text().trim();
+            let url = titleEl.attr(engine.urlAttr) || '';
+            const snippet = $(el).find(engine.snippetSelector).text().trim();
+            if (engine.name === 'DuckDuckGo' && url.includes('uddg=')) {
+              try { const parsed = new URL(url, 'https://duckduckgo.com'); url = parsed.searchParams.get('uddg') || url; } catch (e) {}
+            }
+            if (url && !seenUrls.has(url)) {
+              seenUrls.add(url);
+              const name = cleanTitle(title);
+              if (isGenericBusinessName(name)) continue;
+              const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (historyKeys.has(nameKey)) continue;
+              let combinedText = `${title} ${snippet}`;
+              let phone = extractIndianPhone(combinedText);
+              let email = extractEmail(combinedText);
+              results.push({
+                Name: name, Niche: niche, Location: location, Phone: phone, Email: email,
+                Website: url.startsWith('http') ? url : 'N/A', Ratings: '4.0/5.0', Source: platformName
+              });
+              logCallback(`Extracted Lead (${results.length}/${maxResults}): ${name}`);
+            }
+          }
+        } else {
+          logCallback(`${engine.name} returned HTTP ${res.status}, trying next engine...`);
+          break;
         }
+      } catch (e: any) {
+        logCallback(`${engine.name} Page ${page + 1} Warning: ${e.message}`);
+        break;
       }
-    } catch (e: any) {
-      logCallback(`Bing Dork Page ${page + 1} Warning: ${e.message}`);
     }
   }
-
   return results;
 }
 
