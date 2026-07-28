@@ -178,8 +178,8 @@ async function scrapeSearchDork(
   const results: ScrapedBusiness[] = [];
   const seenUrls = new Set<string>();
 
-  // Iterate up to 4 search pages to collect requested maxResults
-  for (let page = 0; page < 4; page++) {
+  // Iterate up to 5 search pages to collect requested maxResults
+  for (let page = 0; page < 5; page++) {
     if (results.length >= maxResults) break;
     const currentOffset = (pageOffset + page) * 15;
 
