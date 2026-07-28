@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Download, Play, CheckCircle2, AlertCircle, TerminalSquare, Globe, Phone, Star, Layers, Zap, Cpu, Sparkles, Database } from 'lucide-react';
+import { Download, Play, CheckCircle2, AlertCircle, TerminalSquare, Globe, Phone, Star, Layers, Zap, Cpu, Sparkles, Database, Mail, Share2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function Home() {
@@ -99,7 +99,6 @@ export default function Home() {
     }
     return () => clearInterval(interval);
   }, [jobId, status]);
-
   const downloadExcel = () => {
     if (!resultData || resultData.length === 0) return alert("No lead data available to download.");
     
@@ -110,6 +109,7 @@ export default function Home() {
       'Phone Number': item.Phone || 'N/A',
       'Email Address': item.Email || 'N/A',
       'Website': item.Website || 'N/A',
+      'Social Links': (item as any).Socials || 'N/A',
       'Rating': item.Ratings || 'N/A',
       'Source Platforms': item.Source || 'N/A'
     }));
@@ -122,7 +122,6 @@ export default function Home() {
     const cleanLoc = (location || 'Global').replace(/[^a-zA-Z0-9]/g, '_');
     XLSX.writeFile(workbook, `DATA_MINER_${cleanNiche}_${cleanLoc}.xlsx`);
   };
-
   return (
     <div className="min-h-screen text-gray-900 font-sans p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -415,7 +414,9 @@ export default function Home() {
                       <tr>
                         <th className="px-4 py-3">Business Name</th>
                         <th className="px-4 py-3">Phone</th>
+                        <th className="px-4 py-3">Email</th>
                         <th className="px-4 py-3">Website</th>
+                        <th className="px-4 py-3">Socials</th>
                         <th className="px-4 py-3">Rating</th>
                         <th className="px-4 py-3">Sources</th>
                       </tr>
@@ -430,12 +431,32 @@ export default function Home() {
                               {item.Phone || 'N/A'}
                             </span>
                           </td>
+                          <td className="px-4 py-3 text-xs max-w-[150px] truncate">
+                            {item.Email && item.Email !== 'N/A' ? (
+                              <span className="flex items-center gap-1 text-gray-700 font-mono">
+                                <Mail className="w-3.5 h-3.5 text-[#EA580C] shrink-0" />
+                                {item.Email}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">N/A</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-xs max-w-[160px] truncate">
                             {item.Website && item.Website !== 'N/A' ? (
                               <a href={item.Website} target="_blank" rel="noreferrer" className="text-[#EA580C] font-semibold hover:underline flex items-center gap-1">
                                 <Globe className="w-3.5 h-3.5 text-[#EA580C] shrink-0" />
                                 {item.Website.replace(/^https?:\/\//, '')}
                               </a>
+                            ) : (
+                              <span className="text-gray-400">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-xs max-w-[180px] truncate">
+                            {(item as any).Socials && (item as any).Socials !== 'N/A' ? (
+                              <span className="flex items-center gap-1 text-gray-700 font-mono" title={(item as any).Socials}>
+                                <Share2 className="w-3.5 h-3.5 text-[#EA580C] shrink-0" />
+                                {(item as any).Socials}
+                              </span>
                             ) : (
                               <span className="text-gray-400">N/A</span>
                             )}

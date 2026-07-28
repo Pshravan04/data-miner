@@ -9,6 +9,7 @@ export interface ScrapedBusiness {
   Website: string;
   Ratings: string;
   Source: string;
+  Socials?: string;
 }
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
@@ -177,6 +178,59 @@ async function enrichMissingPhone(name: string, location: string): Promise<{ pho
 }
 
 /**
+ * Dynamic Website Contact Enrichment Scraper.
+ * Fetches the target business domain, parses links with Cheerio,
+ * and extracts any emails or social media links (Instagram, Facebook, LinkedIn, Twitter, YouTube).
+ */
+export async function enrichLeadFromWebsite(websiteUrl: string): Promise<{ email: string; socials: string }> {
+  if (!websiteUrl || websiteUrl === 'N/A' || websiteUrl.includes('google.com/search') || websiteUrl.includes('bing.com')) {
+    return { email: 'N/A', socials: 'N/A' };
+  }
+
+  try {
+    const res = await fetchWithTimeout(websiteUrl, {
+      headers: {
+        'User-Agent': DEFAULT_USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      }
+    }, 4000);
+
+    if (res.ok) {
+      const html = await res.text();
+      const $ = cheerio.load(html);
+
+      // 1. Extract Email Address
+      let email = extractEmail(html);
+
+      // 2. Extract Social Link URLs
+      const socialLinks: string[] = [];
+      $('a[href]').each((_, el) => {
+        const href = $(el).attr('href')?.trim();
+        if (href) {
+          const lowerHref = href.toLowerCase();
+          if (lowerHref.includes('facebook.com') && !socialLinks.some(link => link.includes('facebook.com'))) {
+            socialLinks.push(href);
+          } else if (lowerHref.includes('instagram.com') && !socialLinks.some(link => link.includes('instagram.com'))) {
+            socialLinks.push(href);
+          } else if (lowerHref.includes('linkedin.com') && !socialLinks.some(link => link.includes('linkedin.com'))) {
+            socialLinks.push(href);
+          } else if ((lowerHref.includes('twitter.com') || lowerHref.includes('x.com')) && !socialLinks.some(link => link.includes('twitter.com') || link.includes('x.com'))) {
+            socialLinks.push(href);
+          } else if (lowerHref.includes('youtube.com') && !socialLinks.some(link => link.includes('youtube.com'))) {
+            socialLinks.push(href);
+          }
+        }
+      });
+
+      const socials = socialLinks.length > 0 ? socialLinks.join(', ') : 'N/A';
+      return { email, socials };
+    }
+  } catch (e) {}
+
+  return { email: 'N/A', socials: 'N/A' };
+}
+
+/**
  * Live Overpass OpenData Spatial Harvester.
  */
 export async function scrapeOverpassAPI(
@@ -275,6 +329,7 @@ export async function scrapeOpenStreetMap(
     const cleanLoc = location.split(',')[0].toLowerCase().trim();
     const cleanNicheStr = niche.replace(/agents?/i, '').trim();
     
+    // Cycle through top 4 sub-locations to gather fresh leads quickly
     const baseSubLocs = SUB_LOCATIONS[cleanLoc] || [];
     const subLocs = ['', ...baseSubLocs.slice(0, 3)];
     

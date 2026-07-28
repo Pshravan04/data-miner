@@ -11,7 +11,8 @@ import {
   scrapeGoogleMaps,
   scrapeYellowPages,
   scrapeOpenStreetMap,
-  scrapeOverpassAPI
+  scrapeOverpassAPI,
+  enrichLeadFromWebsite
 } from './scraper';
 
 // Simple in-memory jobs store for progress logs and offset increments
@@ -153,6 +154,9 @@ function mergeAndDeduplicateLeads(leads: ScrapedBusiness[]): ScrapedBusiness[] {
       if ((!existing.Email || existing.Email === 'N/A') && item.Email && item.Email !== 'N/A') {
         existing.Email = item.Email;
       }
+      if ((!existing.Socials || existing.Socials === 'N/A') && item.Socials && item.Socials !== 'N/A') {
+        existing.Socials = item.Socials;
+      }
     }
   }
 
@@ -239,6 +243,22 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
 
     log(`Enriching and verifying phone contact numbers for ${rawLeads.length} raw leads...`);
     const mergedLeads = mergeAndDeduplicateLeads(rawLeads).slice(0, maxResults);
+
+    // Call dynamic website contact enrichment on the final list of leads
+    log(`Running background contact enrichment on discovered business websites...`);
+    await Promise.all(
+      mergedLeads.map(async (lead) => {
+        if (lead.Website && lead.Website !== 'N/A') {
+          const enrichment = await enrichLeadFromWebsite(lead.Website);
+          if (enrichment.email !== 'N/A' && lead.Email === 'N/A') {
+            lead.Email = enrichment.email;
+          }
+          if (enrichment.socials !== 'N/A') {
+            lead.Socials = enrichment.socials;
+          }
+        }
+      })
+    );
 
     // Save newly extracted lead keys to history store
     const newKeysToSave: string[] = [];
