@@ -12,7 +12,7 @@ export default function Home() {
   
   // Platform selection
   const availablePlatforms = [
-    'All Platforms', 'Google Maps', 'YellowPages', 'Yelp', 'TripAdvisor', 'Zillow', 'LinkedIn', 'Apollo'
+    'All Platforms', 'Google Maps', 'Instagram', 'Facebook', 'LinkedIn', 'Justdial', 'YellowPages'
   ];
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['All Platforms']);
 
@@ -225,27 +225,46 @@ export default function Home() {
                   disabled={status === 'processing'}
                 />
                 <datalist id="location-options">
-                  <option value="Global (Worldwide)" />
-                  <option value="North America" />
-                  <option value="Europe" />
-                  <option value="Asia" />
-                  <option value="Mumbai, India" />
-                  <option value="Delhi, India" />
-                  <option value="Bangalore, India" />
-                  <option value="New York, NY" />
-                  <option value="Los Angeles, CA" />
-                  <option value="Chicago, IL" />
-                  <option value="Houston, TX" />
-                  <option value="Austin, TX" />
-                  <option value="Miami, FL" />
-                  <option value="San Francisco, CA" />
-                  <option value="London, UK" />
-                  <option value="Berlin, Germany" />
-                  <option value="Paris, France" />
-                  <option value="Dubai, UAE" />
-                  <option value="Singapore" />
-                  <option value="Tokyo, Japan" />
-                  <option value="Sydney, Australia" />
+                  <option value="Mumbai, Maharashtra" />
+                  <option value="Delhi NCR" />
+                  <option value="Bangalore, Karnataka" />
+                  <option value="Hyderabad, Telangana" />
+                  <option value="Ahmedabad, Gujarat" />
+                  <option value="Chennai, Tamil Nadu" />
+                  <option value="Kolkata, West Bengal" />
+                  <option value="Pune, Maharashtra" />
+                  <option value="Jaipur, Rajasthan" />
+                  <option value="Surat, Gujarat" />
+                  <option value="Lucknow, Uttar Pradesh" />
+                  <option value="Kanpur, Uttar Pradesh" />
+                  <option value="Nagpur, Maharashtra" />
+                  <option value="Indore, Madhya Pradesh" />
+                  <option value="Thane, Maharashtra" />
+                  <option value="Bhopal, Madhya Pradesh" />
+                  <option value="Visakhapatnam, Andhra Pradesh" />
+                  <option value="Vadodara, Gujarat" />
+                  <option value="Ghaziabad, Uttar Pradesh" />
+                  <option value="Ludhiana, Punjab" />
+                  <option value="Agra, Uttar Pradesh" />
+                  <option value="Nashik, Maharashtra" />
+                  <option value="Faridabad, Haryana" />
+                  <option value="Meerut, Uttar Pradesh" />
+                  <option value="Rajkot, Gujarat" />
+                  <option value="Varanasi, Uttar Pradesh" />
+                  <option value="Navi Mumbai, Maharashtra" />
+                  <option value="Amritsar, Punjab" />
+                  <option value="Allahabad, Uttar Pradesh" />
+                  <option value="Ranchi, Jharkhand" />
+                  <option value="Coimbatore, Tamil Nadu" />
+                  <option value="Jabalpur, Madhya Pradesh" />
+                  <option value="Gwalior, Madhya Pradesh" />
+                  <option value="Vijayawada, Andhra Pradesh" />
+                  <option value="Jodhpur, Rajasthan" />
+                  <option value="Madurai, Tamil Nadu" />
+                  <option value="Raipur, Chhattisgarh" />
+                  <option value="Kota, Rajasthan" />
+                  <option value="Guwahati, Assam" />
+                  <option value="Chandigarh" />
                 </datalist>
               </div>
 
