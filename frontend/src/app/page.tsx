@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Download, Play, CheckCircle2, AlertCircle, TerminalSquare, Globe, Phone, Mail, Star, Layers } from 'lucide-react';
+import { Download, Play, CheckCircle2, AlertCircle, TerminalSquare, Globe, Phone, Star, Layers, Zap, Cpu, Sparkles, Database } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function Home() {
@@ -42,7 +42,7 @@ export default function Home() {
     if (selectedPlatforms.length === 0) return alert("Select at least one platform");
     
     setStatus('processing');
-    setLogs(['Initializing request...']);
+    setLogs(['[SYSTEM] Initializing 8-bit scraper crew...']);
     setProgress('Starting job...');
     setResultData(null);
 
@@ -103,7 +103,6 @@ export default function Home() {
   const downloadExcel = () => {
     if (!resultData || resultData.length === 0) return alert("No lead data available to download.");
     
-    // Explicitly format column headers for clean spreadsheet layout
     const formattedData = resultData.map(item => ({
       'Business Name': item.Name || 'N/A',
       'Target Niche': item.Niche || niche || 'N/A',
@@ -121,39 +120,65 @@ export default function Home() {
     
     const cleanNiche = (niche || 'Leads').replace(/[^a-zA-Z0-9]/g, '_');
     const cleanLoc = (location || 'Global').replace(/[^a-zA-Z0-9]/g, '_');
-    XLSX.writeFile(workbook, `Leads_${cleanNiche}_${cleanLoc}.xlsx`);
+    XLSX.writeFile(workbook, `DATA_MINER_${cleanNiche}_${cleanLoc}.xlsx`);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans p-4 md:p-8">
+    <div className="min-h-screen text-gray-100 font-sans p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
         
-        {/* Header */}
-        <header className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Multi-Agent Lead Scraper</h1>
-            <p className="text-gray-500 mt-2">Extract enriched B2B data from 20+ platforms simultaneously using AI agents.</p>
+        {/* Retro Pixel Arcade Header */}
+        <header className="bg-[#181510] border-4 border-[#FFC700] rounded-none p-6 shadow-[6px_6px_0px_#000000] flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+          <div className="flex items-center gap-4 z-10">
+            <div className="w-14 h-14 bg-[#FF5500] border-3 border-black flex items-center justify-center shadow-[3px_3px_0px_#FFC700] shrink-0">
+              <Zap className="w-8 h-8 text-[#FFC700] fill-[#FFC700]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-pixel text-xl sm:text-2xl md:text-3xl text-[#FFC700] drop-shadow-[2px_2px_0px_#FF5500] tracking-wider">
+                  DATA MINER
+                </h1>
+                <span className="text-[#FF5500] font-pixel text-xs animate-pulse">v2.0</span>
+              </div>
+              <p className="font-silkscreen text-xs sm:text-sm text-yellow-500/90 mt-1">
+                Multi-Platform 8-Bit B2B Lead Extraction Engine
+              </p>
+            </div>
           </div>
-          <div className="hidden md:flex gap-2">
-            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">Bypass Anti-Bot</span>
-            <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">AI Enriched</span>
+
+          <div className="flex flex-wrap gap-3 z-10">
+            <span className="pixel-badge-yellow text-xs px-3 py-1.5 flex items-center gap-1.5">
+              <Cpu className="w-3.5 h-3.5 text-black" />
+              STEALTH BOT
+            </span>
+            <span className="pixel-badge-orange text-xs px-3 py-1.5 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-white" />
+              AI ENRICHED
+            </span>
           </div>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Configuration Panel */}
+          {/* Pixel Control Panel */}
           <div className="lg:col-span-1 space-y-6">
-            <form onSubmit={startJob} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-6">
+            <form onSubmit={startJob} className="bg-[#181510] border-3 border-[#FF5500] p-6 shadow-[6px_6px_0px_#000000] space-y-6">
               
+              <div className="flex items-center gap-2 border-b-2 border-dashed border-[#FF5500]/40 pb-3">
+                <Database className="w-5 h-5 text-[#FFC700]" />
+                <h2 className="font-silkscreen text-base font-bold text-[#FFC700]">TARGET CONTROLS</h2>
+              </div>
+
               <div>
-                <label className="block text-sm font-semibold mb-2">Target Niche / Business Type</label>
+                <label className="block font-silkscreen text-xs text-[#FFC700] mb-2 uppercase">
+                  Target Niche / Business Type
+                </label>
                 <input 
                   type="text"
                   required
                   list="niche-options"
-                  placeholder="Type to search or enter custom..."
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                  placeholder="e.g. Real Estate, Dentists..."
+                  className="w-full px-4 py-2.5 bg-[#0D0C0A] border-2 border-[#FF5500] text-yellow-300 placeholder-yellow-700/60 focus:border-[#FFC700] focus:ring-1 focus:ring-[#FFC700] outline-none text-sm font-medium"
                   value={niche}
                   onChange={e => setNiche(e.target.value)}
                   disabled={status === 'processing'}
@@ -186,13 +211,15 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-2">Location</label>
+                <label className="block font-silkscreen text-xs text-[#FFC700] mb-2 uppercase">
+                  Target Location
+                </label>
                 <input 
                   type="text"
                   required
                   list="location-options"
-                  placeholder="Type to search or enter custom..."
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                  placeholder="e.g. Mumbai, New York, London..."
+                  className="w-full px-4 py-2.5 bg-[#0D0C0A] border-2 border-[#FF5500] text-yellow-300 placeholder-yellow-700/60 focus:border-[#FFC700] focus:ring-1 focus:ring-[#FFC700] outline-none text-sm font-medium"
                   value={location}
                   onChange={e => setLocation(e.target.value)}
                   disabled={status === 'processing'}
@@ -202,8 +229,9 @@ export default function Home() {
                   <option value="North America" />
                   <option value="Europe" />
                   <option value="Asia" />
-                  <option value="South America" />
-                  <option value="Oceania" />
+                  <option value="Mumbai, India" />
+                  <option value="Delhi, India" />
+                  <option value="Bangalore, India" />
                   <option value="New York, NY" />
                   <option value="Los Angeles, CA" />
                   <option value="Chicago, IL" />
@@ -211,44 +239,25 @@ export default function Home() {
                   <option value="Austin, TX" />
                   <option value="Miami, FL" />
                   <option value="San Francisco, CA" />
-                  <option value="Seattle, WA" />
-                  <option value="Denver, CO" />
-                  <option value="Boston, MA" />
-                  <option value="Toronto, ON" />
-                  <option value="Vancouver, BC" />
                   <option value="London, UK" />
-                  <option value="Manchester, UK" />
                   <option value="Berlin, Germany" />
-                  <option value="Munich, Germany" />
                   <option value="Paris, France" />
-                  <option value="Madrid, Spain" />
-                  <option value="Barcelona, Spain" />
-                  <option value="Rome, Italy" />
-                  <option value="Amsterdam, Netherlands" />
                   <option value="Dubai, UAE" />
-                  <option value="Riyadh, Saudi Arabia" />
-                  <option value="Mumbai, India" />
-                  <option value="Delhi, India" />
-                  <option value="Bangalore, India" />
                   <option value="Singapore" />
                   <option value="Tokyo, Japan" />
-                  <option value="Seoul, South Korea" />
-                  <option value="Hong Kong" />
                   <option value="Sydney, Australia" />
-                  <option value="Melbourne, Australia" />
-                  <option value="Auckland, New Zealand" />
-                  <option value="Cape Town, South Africa" />
-                  <option value="Sao Paulo, Brazil" />
                 </datalist>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-2">Max Results</label>
+                <label className="block font-silkscreen text-xs text-[#FFC700] mb-2 uppercase">
+                  Max Results Count
+                </label>
                 <input 
                   type="number"
                   min="10"
                   max="10000"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-4 py-2.5 bg-[#0D0C0A] border-2 border-[#FF5500] text-yellow-300 focus:border-[#FFC700] outline-none text-sm font-medium"
                   value={maxResults}
                   onChange={e => setMaxResults(Number(e.target.value))}
                   disabled={status === 'processing'}
@@ -256,8 +265,10 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-2">Select Target Platforms</label>
-                <p className="text-xs text-gray-500 mb-3">Agents will navigate these sources to merge contact profiles.</p>
+                <label className="block font-silkscreen text-xs text-[#FFC700] mb-2 uppercase">
+                  Select Target Platforms
+                </label>
+                <p className="text-xs text-yellow-500/70 mb-3 font-silkscreen">Select directories to mine:</p>
                 <div className="flex flex-wrap gap-2">
                   {availablePlatforms.map(p => (
                     <button
@@ -265,10 +276,10 @@ export default function Home() {
                       type="button"
                       disabled={status === 'processing'}
                       onClick={() => togglePlatform(p)}
-                      className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                      className={`px-3 py-1.5 text-xs font-silkscreen border-2 border-black transition-all ${
                         selectedPlatforms.includes(p) 
-                        ? 'bg-blue-600 text-white border-blue-600' 
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
+                        ? 'bg-[#FFC700] text-black shadow-[2px_2px_0px_#FF5500] font-bold' 
+                        : 'bg-[#0D0C0A] text-yellow-500/80 border-[#FF5500]/50 hover:border-[#FFC700]'
                       }`}
                     >
                       {p}
@@ -280,89 +291,108 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={status === 'processing'}
-                className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                className="w-full py-3.5 pixel-button-yellow text-sm flex items-center justify-center gap-2 uppercase tracking-wide cursor-pointer disabled:opacity-50"
               >
                 {status === 'processing' ? (
-                  <span className="animate-pulse">Agents Working...</span>
+                  <span className="animate-pulse flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-black animate-spin" /> BOTS MINING...
+                  </span>
                 ) : (
                   <>
-                    <Play className="w-4 h-4" /> Start Extraction
+                    <Play className="w-4 h-4 fill-black" /> START EXTRACTION
                   </>
                 )}
               </button>
             </form>
           </div>
 
-          {/* Monitoring & Results Panel */}
+          {/* Arcade Monitoring & Results Panel */}
           <div className="lg:col-span-2 space-y-6">
             
-            {/* Live Terminal */}
-            <div className="bg-gray-900 rounded-2xl p-6 shadow-sm flex flex-col h-80">
-              <div className="flex items-center gap-2 text-gray-400 mb-4 border-b border-gray-800 pb-4">
-                <TerminalSquare className="w-5 h-5" />
-                <h3 className="font-semibold tracking-wide uppercase text-sm">Agent Activity Log</h3>
+            {/* Retro Arcade CRT Terminal */}
+            <div className="bg-[#0D0C0A] border-3 border-[#FF5500] shadow-[6px_6px_0px_#000000] flex flex-col h-80 relative overflow-hidden">
+              <div className="bg-[#181510] border-b-2 border-[#FF5500] px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[#FFC700]">
+                  <TerminalSquare className="w-4 h-4 text-[#FF5500]" />
+                  <span className="font-silkscreen text-xs font-bold text-[#FFC700]">AGENT_ACTIVITY.LOG [CRT MODE]</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 bg-[#FF5500] border border-black"></div>
+                  <div className="w-3 h-3 bg-[#FFC700] border border-black"></div>
+                  <div className="w-3 h-3 bg-green-500 border border-black"></div>
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto space-y-2 font-mono text-sm">
+
+              <div className="flex-1 p-4 overflow-y-auto space-y-2 font-arcade text-lg scanlines">
                 {logs.length === 0 ? (
-                  <p className="text-gray-600">Waiting for job to start...</p>
+                  <p className="text-yellow-700/60">[SYSTEM READY] Enter Niche and Location, then click START EXTRACTION...</p>
                 ) : (
                   logs.map((l, i) => (
-                    <div key={i} className="text-green-400">
-                      <span className="text-gray-500 mr-2">[{new Date().toLocaleTimeString()}]</span>
-                      {l}
+                    <div key={i} className="text-[#FFC700] tracking-wide flex items-start gap-2">
+                      <span className="text-[#FF5500] select-none">&gt;&gt;</span>
+                      <span>{l}</span>
                     </div>
                   ))
                 )}
                 {status === 'processing' && (
-                  <div className="text-blue-400 animate-pulse mt-2">_</div>
+                  <div className="text-[#FF5500] animate-pulse mt-2 flex items-center gap-1 font-pixel text-xs">
+                    <span>MINING DATA</span>
+                    <span className="inline-block w-2 h-4 bg-[#FFC700]"></span>
+                  </div>
                 )}
               </div>
             </div>
 
             {/* Results Action Banner */}
             {status === 'completed' && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-green-100 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex items-center gap-3 text-green-700">
-                  <CheckCircle2 className="w-8 h-8 shrink-0" />
+              <div className="bg-[#181510] border-3 border-[#FFC700] p-6 shadow-[6px_6px_0px_#000000] flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-10 h-10 text-[#FFC700] shrink-0" />
                   <div>
-                    <h3 className="font-bold text-lg">Extraction Complete!</h3>
-                    <p className="text-sm opacity-80">Successfully extracted and enriched {resultData?.length || 0} leads with full source mapping.</p>
+                    <h3 className="font-silkscreen font-bold text-[#FFC700] text-lg">EXTRACTION COMPLETE!</h3>
+                    <p className="font-sans text-xs text-yellow-400/80 mt-0.5">
+                      Successfully extracted and enriched <span className="font-bold text-[#FFC700]">{resultData?.length || 0}</span> lead profiles.
+                    </p>
                   </div>
                 </div>
                 <button
                   onClick={downloadExcel}
-                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold flex items-center gap-2 transition-all shrink-0 shadow-md"
+                  className="px-6 py-3.5 pixel-button-orange text-xs flex items-center gap-2 shrink-0 cursor-pointer"
                 >
-                  <Download className="w-5 h-5" />
-                  Download Excel (.xlsx)
+                  <Download className="w-4 h-4" />
+                  DOWNLOAD EXCEL (.XLSX)
                 </button>
               </div>
             )}
 
             {status === 'failed' && (
-              <div className="bg-red-50 text-red-700 rounded-2xl p-6 shadow-sm border border-red-100 flex items-center gap-3">
-                <AlertCircle className="w-6 h-6 shrink-0" />
+              <div className="bg-[#1D100C] border-3 border-red-500 p-6 shadow-[6px_6px_0px_#000000] flex items-center gap-3">
+                <AlertCircle className="w-8 h-8 text-red-500 shrink-0" />
                 <div>
-                  <h3 className="font-bold">Extraction Failed</h3>
-                  <p className="text-sm">{progress}</p>
+                  <h3 className="font-silkscreen font-bold text-red-400">EXTRACTION FAILED</h3>
+                  <p className="font-sans text-xs text-red-300">{progress}</p>
                 </div>
               </div>
             )}
 
             {/* Extracted Leads Data Grid Table */}
             {resultData && resultData.length > 0 && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
+              <div className="bg-[#181510] border-3 border-[#FFC700] p-6 shadow-[6px_6px_0px_#000000] space-y-4">
+                <div className="flex items-center justify-between border-b-2 border-dashed border-[#FFC700]/30 pb-3">
                   <div className="flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-blue-600" />
-                    <h3 className="font-bold text-gray-900 text-lg">Extracted Lead Profiles ({resultData.length})</h3>
+                    <Layers className="w-5 h-5 text-[#FF5500]" />
+                    <h3 className="font-silkscreen font-bold text-[#FFC700] text-sm">
+                      EXTRACTED LEADS GRID ({resultData.length})
+                    </h3>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full">Source Verified</span>
+                  <span className="pixel-badge-yellow text-[10px] px-2 py-0.5">
+                    VERIFIED
+                  </span>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm text-gray-600">
-                    <thead className="bg-gray-50 text-gray-700 uppercase text-xs font-semibold">
+                  <table className="w-full text-left text-sm text-gray-200">
+                    <thead className="bg-[#0D0C0A] border-b-2 border-[#FF5500] text-[#FFC700] font-silkscreen text-[11px] uppercase">
                       <tr>
                         <th className="px-4 py-3">Business Name</th>
                         <th className="px-4 py-3">Phone</th>
@@ -371,34 +401,34 @@ export default function Home() {
                         <th className="px-4 py-3">Sources</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-yellow-900/20 font-sans">
                       {resultData.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 font-semibold text-gray-900 max-w-[200px] truncate">{item.Name}</td>
+                        <tr key={idx} className="hover:bg-[#241E15] transition-colors">
+                          <td className="px-4 py-3 font-semibold text-yellow-300 max-w-[200px] truncate">{item.Name}</td>
                           <td className="px-4 py-3 text-xs whitespace-nowrap">
-                            <span className="flex items-center gap-1.5 text-gray-700">
-                              <Phone className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="flex items-center gap-1.5 text-yellow-400/90 font-mono">
+                              <Phone className="w-3.5 h-3.5 text-[#FF5500]" />
                               {item.Phone || 'N/A'}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-xs max-w-[160px] truncate">
                             {item.Website && item.Website !== 'N/A' ? (
-                              <a href={item.Website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
-                                <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                              <a href={item.Website} target="_blank" rel="noreferrer" className="text-[#FFC700] hover:underline flex items-center gap-1">
+                                <Globe className="w-3.5 h-3.5 text-[#FF5500] shrink-0" />
                                 {item.Website.replace(/^https?:\/\//, '')}
                               </a>
                             ) : (
-                              <span className="text-gray-400">N/A</span>
+                              <span className="text-yellow-700/60">N/A</span>
                             )}
                           </td>
                           <td className="px-4 py-3 text-xs whitespace-nowrap">
-                            <span className="flex items-center gap-1 text-amber-600 font-medium">
-                              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                            <span className="flex items-center gap-1 text-[#FFC700] font-bold font-mono">
+                              <Star className="w-3.5 h-3.5 fill-[#FFC700] text-[#FFC700]" />
                               {item.Ratings || 'N/A'}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-xs">
-                            <span className="inline-block bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded border border-blue-100">
+                            <span className="inline-block bg-[#0D0C0A] text-[#FFC700] font-silkscreen text-[10px] px-2 py-1 border border-[#FF5500]">
                               {item.Source || 'N/A'}
                             </span>
                           </td>
