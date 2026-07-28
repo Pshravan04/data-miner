@@ -501,48 +501,62 @@ async function scrapeSearchDork(
   return results;
 }
 
+function getContactQualifier(location: string): string {
+  const lower = location.toLowerCase();
+  if (lower.includes('india') || lower.includes('mumbai') || lower.includes('pune') || lower.includes('delhi') || lower.includes('bangalore') || lower.includes('hyderabad') || lower.includes('chennai') || lower.includes('kolkata') || lower.includes('jaipur') || lower.includes('surat') || lower.includes('lucknow') || lower.includes('nagpur') || lower.includes('indore') || lower.includes('thane')) {
+    return '"+91"';
+  }
+  return '"phone" OR "mobile" OR "contact"';
+}
+
 // ----------------------------------------------------
 // Real Scraper Exports
 // ----------------------------------------------------
 export async function scrapeInstagram(
   niche: string, location: string, maxResults: number, pageOffset: number, historyKeys: Set<string>, logCallback: (msg: string) => void
 ): Promise<ScrapedBusiness[]> {
-  const dorkQuery = `site:instagram.com ${niche} ${location.split(',')[0]}`;
+  const qualifier = getContactQualifier(location);
+  const dorkQuery = `site:instagram.com "${niche}" "${location.split(',')[0]}" ${qualifier}`;
   return scrapeSearchDork(dorkQuery, niche, location, 'Instagram', maxResults, pageOffset, historyKeys, logCallback);
 }
 
 export async function scrapeFacebook(
   niche: string, location: string, maxResults: number, pageOffset: number, historyKeys: Set<string>, logCallback: (msg: string) => void
 ): Promise<ScrapedBusiness[]> {
-  const dorkQuery = `site:facebook.com ${niche} ${location.split(',')[0]}`;
+  const qualifier = getContactQualifier(location);
+  const dorkQuery = `site:facebook.com "${niche}" "${location.split(',')[0]}" ${qualifier}`;
   return scrapeSearchDork(dorkQuery, niche, location, 'Facebook', maxResults, pageOffset, historyKeys, logCallback);
 }
 
 export async function scrapeLinkedIn(
   niche: string, location: string, maxResults: number, pageOffset: number, historyKeys: Set<string>, logCallback: (msg: string) => void
 ): Promise<ScrapedBusiness[]> {
-  const dorkQuery = `site:linkedin.com ${niche} ${location.split(',')[0]}`;
+  const qualifier = getContactQualifier(location);
+  const dorkQuery = `site:linkedin.com "${niche}" "${location.split(',')[0]}" ${qualifier}`;
   return scrapeSearchDork(dorkQuery, niche, location, 'LinkedIn', maxResults, pageOffset, historyKeys, logCallback);
 }
 
 export async function scrapeJustdial(
   niche: string, location: string, maxResults: number, pageOffset: number, historyKeys: Set<string>, logCallback: (msg: string) => void
 ): Promise<ScrapedBusiness[]> {
-  const dorkQuery = `site:justdial.com ${niche} ${location.split(',')[0]}`;
+  const qualifier = getContactQualifier(location);
+  const dorkQuery = `site:justdial.com "${niche}" "${location.split(',')[0]}" ${qualifier}`;
   return scrapeSearchDork(dorkQuery, niche, location, 'Justdial', maxResults, pageOffset, historyKeys, logCallback);
 }
 
 export async function scrapeGoogleMaps(
   niche: string, location: string, maxResults: number, pageOffset: number, historyKeys: Set<string>, logCallback: (msg: string) => void
 ): Promise<ScrapedBusiness[]> {
-  const dorkQuery = `${niche} ${location.split(',')[0]}`;
+  const qualifier = getContactQualifier(location);
+  const dorkQuery = `"${niche}" "${location.split(',')[0]}" ${qualifier}`;
   return scrapeSearchDork(dorkQuery, niche, location, 'Google Maps', maxResults, pageOffset, historyKeys, logCallback);
 }
 
 export async function scrapeYellowPages(
   niche: string, location: string, maxResults: number, pageOffset: number, historyKeys: Set<string>, logCallback: (msg: string) => void
 ): Promise<ScrapedBusiness[]> {
-  const dorkQuery = `site:sulekha.com OR site:yellowpages.co.in ${niche} ${location.split(',')[0]}`;
+  const qualifier = getContactQualifier(location);
+  const dorkQuery = `(site:sulekha.com OR site:yellowpages.co.in) "${niche}" "${location.split(',')[0]}" ${qualifier}`;
   return scrapeSearchDork(dorkQuery, niche, location, 'YellowPages', maxResults, pageOffset, historyKeys, logCallback);
 }
 

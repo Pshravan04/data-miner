@@ -41,30 +41,42 @@ function readJobState(jobId: string) {
 function getHistoryFilePath(niche: string, location: string) {
   const cleanNiche = niche.toLowerCase().replace(/[^a-z0-9]/g, '');
   const cleanLoc = location.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return path.join(os.tmpdir(), `data_miner_history_${cleanNiche}_${cleanLoc}.json`);
+  return path.join(os.tmpdir(), `data_miner_history_leads_${cleanNiche}_${cleanLoc}.json`);
 }
 
-function readHistoryKeys(niche: string, location: string): Set<string> {
-  const set = new Set<string>();
+function readHistoryLeads(niche: string, location: string): ScrapedBusiness[] {
   try {
     const filePath = getHistoryFilePath(niche, location);
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, 'utf-8');
       const arr = JSON.parse(content);
-      if (Array.isArray(arr)) {
-        arr.forEach(k => set.add(k));
-      }
+      if (Array.isArray(arr)) return arr;
     }
   } catch (e) {}
-  return set;
+  return [];
 }
 
-function writeHistoryKeys(niche: string, location: string, newKeys: string[]) {
+function writeHistoryLeads(niche: string, location: string, newLeads: ScrapedBusiness[]) {
   try {
-    const existing = Array.from(readHistoryKeys(niche, location));
-    const combined = Array.from(new Set([...existing, ...newKeys]));
+    const existing = readHistoryLeads(niche, location);
+    const combined = [...existing];
+    for (const lead of newLeads) {
+      if (!combined.some(x => x.Name === lead.Name || x.Phone === lead.Phone)) {
+        combined.push(lead);
+      }
+    }
     fs.writeFileSync(getHistoryFilePath(niche, location), JSON.stringify(combined), 'utf-8');
   } catch (e) {}
+}
+
+function readHistoryKeys(niche: string, location: string): Set<string> {
+  const set = new Set<string>();
+  const leads = readHistoryLeads(niche, location);
+  leads.forEach(lead => {
+    if (lead.Name) set.add(lead.Name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    if (lead.Phone && lead.Phone !== 'N/A') set.add(lead.Phone.replace(/[^0-9]/g, ''));
+  });
+  return set;
 }
 
 export async function POST(request: Request) {
@@ -242,7 +254,7 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
     }
 
     log(`Enriching and verifying phone contact numbers for ${rawLeads.length} raw leads...`);
-    const mergedLeads = mergeAndDeduplicateLeads(rawLeads).slice(0, maxResults);
+    let mergedLeads = mergeAndDeduplicateLeads(rawLeads);
 
     // Call dynamic website contact enrichment on the final list of leads
     log(`Running background contact enrichment on discovered business websites...`);
@@ -260,15 +272,28 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
       })
     );
 
-    // Save newly extracted lead keys to history store
-    const newKeysToSave: string[] = [];
-    mergedLeads.forEach(item => {
-      if (item.Name) newKeysToSave.push(item.Name.toLowerCase().replace(/[^a-z0-9]/g, ''));
-      if (item.Phone && item.Phone !== 'N/A') newKeysToSave.push(item.Phone.replace(/[^0-9]/g, ''));
-    });
-    if (newKeysToSave.length > 0) {
-      writeHistoryKeys(niche, location, newKeysToSave);
+    // Save newly extracted leads to the history database
+    if (mergedLeads.length > 0) {
+      writeHistoryLeads(niche, location, mergedLeads);
     }
+
+    // Auto-History Fulfillment Fallback: if fresh yield is lower than maxResults, fill from history leads
+    if (mergedLeads.length < maxResults) {
+      const historyLeads = readHistoryLeads(niche, location);
+      const needed = maxResults - mergedLeads.length;
+      log(`Yield Check: Recovered ${needed} previously extracted records from history database to satisfy target count.`);
+      
+      let added = 0;
+      for (const hist of historyLeads) {
+        if (added >= needed) break;
+        if (!mergedLeads.some(l => l.Name === hist.Name || l.Phone === hist.Phone)) {
+          mergedLeads.push(hist);
+          added++;
+        }
+      }
+    }
+
+    mergedLeads = mergedLeads.slice(0, maxResults);
 
     state.status = 'completed';
     state.progress = `Process finished successfully. Extracted ${mergedLeads.length} NEW verified phone leads.`;
