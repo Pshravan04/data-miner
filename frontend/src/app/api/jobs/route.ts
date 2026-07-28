@@ -9,7 +9,8 @@ export const maxDuration = 60;
 export const jobsStore: Record<string, any> = {};
 
 function getJobFilePath(jobId: string) {
-  return path.join(os.tmpdir(), `data_miner_job_${jobId}.json`);
+  const safeJobId = String(jobId).replace(/[^a-zA-Z0-9_-]/g, '');
+  return path.join(os.tmpdir(), `data_miner_job_${safeJobId}.json`);
 }
 
 function writeJobState(jobId: string, data: any) {
@@ -36,10 +37,20 @@ function readJobState(jobId: string): any {
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const niche = (body.niche && String(body.niche).trim()) || 'Businesses';
-    const location = (body.location && String(body.location).trim()) || 'Global';
-    const platforms = Array.isArray(body.platforms) && body.platforms.length > 0 ? body.platforms : ['Google Maps'];
-    const maxResults = typeof body.maxResults === 'number' && body.maxResults > 0 ? body.maxResults : 50;
+    const rawNiche = (body.niche && String(body.niche).trim()) || 'Businesses';
+    const rawLocation = (body.location && String(body.location).trim()) || 'Global';
+    
+    // Sanitize string inputs to prevent HTML/Script injection
+    const niche = rawNiche.replace(/<[^>]*>?/g, '').substring(0, 100);
+    const location = rawLocation.replace(/<[^>]*>?/g, '').substring(0, 100);
+    
+    const allowedPlatformsList = ['All Platforms', 'Google Maps', 'YellowPages', 'Yelp', 'TripAdvisor', 'Zillow', 'LinkedIn', 'Apollo'];
+    const platforms = Array.isArray(body.platforms) 
+      ? body.platforms.filter((p: any) => typeof p === 'string' && allowedPlatformsList.includes(p)) 
+      : ['Google Maps'];
+
+    const rawMax = typeof body.maxResults === 'number' && body.maxResults > 0 ? body.maxResults : 50;
+    const maxResults = Math.min(Math.max(1, rawMax), 200); // Hard cap between 1 and 200 to prevent DoS amplification
 
     const jobId = Math.random().toString(36).substring(2, 15);
     
