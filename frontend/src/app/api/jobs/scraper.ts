@@ -15,7 +15,6 @@ const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 
 /**
  * Extracts real Indian phone numbers from text snippets.
- * Matches formats: +91 9820154321, 09820154321, 98201 54321, 98201-54321, 022 26730000
  */
 function extractIndianPhone(text: string): string {
   if (!text) return 'N/A';
@@ -76,8 +75,8 @@ function cleanTitle(rawTitle: string): string {
 }
 
 /**
- * Live OpenStreetMap / Nominatim Global B2B Directory Provider.
- * Extracts real registered businesses with actual addresses, web links, and contact info.
+ * Live OpenStreetMap Multi-Term B2B Harvester.
+ * Queries live global map directory databases across multiple query variations to extract up to 100+ real business entities.
  */
 async function scrapeOpenStreetMap(
   niche: string,
@@ -88,55 +87,69 @@ async function scrapeOpenStreetMap(
 ): Promise<ScrapedBusiness[]> {
   logCallback(`Querying Live OpenStreetMap Directory for ${niche} in ${location}...`);
   const results: ScrapedBusiness[] = [];
+  const seenNames = new Set<string>();
 
   try {
     const cleanLoc = location.split(',')[0].trim();
     const cleanNicheStr = niche.replace(/agents?/i, '').trim();
-    const query = `${cleanNicheStr} ${cleanLoc}`;
     
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&extratags=1&limit=50`;
-    
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': DEFAULT_USER_AGENT,
-        'Accept': 'application/json'
-      }
-    });
+    // Multiple search terms to ensure comprehensive B2B coverage
+    const searchQueries = [
+      `${niche} ${cleanLoc}`,
+      `${cleanNicheStr} ${cleanLoc}`,
+      `real estate ${cleanLoc}`,
+      `property ${cleanLoc}`,
+      `agency ${cleanLoc}`
+    ];
 
-    if (res.ok) {
-      const items = await res.json();
-      if (Array.isArray(items)) {
-        for (const item of items) {
-          if (results.length >= maxResults) break;
+    for (const q of searchQueries) {
+      if (results.length >= maxResults) break;
 
-          const rawName = item.display_name ? item.display_name.split(',')[0].trim() : '';
-          const name = cleanTitle(rawName);
-          if (!name || name.length < 3) continue;
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&extratags=1&limit=50`;
+      
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': DEFAULT_USER_AGENT,
+          'Accept': 'application/json'
+        }
+      });
 
-          const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (historyKeys.has(nameKey)) continue;
+      if (res.ok) {
+        const items = await res.json();
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            if (results.length >= maxResults) break;
 
-          const extratags = item.extratags || {};
-          let phone = extratags.phone || extratags['contact:phone'] || extratags.mobile || extractIndianPhone(JSON.stringify(item));
-          let website = extratags.website || extratags['contact:website'] || extratags.url || 'N/A';
-          let email = extratags.email || extratags['contact:email'] || extractEmail(JSON.stringify(item));
+            const rawName = item.display_name ? item.display_name.split(',')[0].trim() : '';
+            const name = cleanTitle(rawName);
+            if (!name || name.length < 3 || seenNames.has(name.toLowerCase())) continue;
+            seenNames.add(name.toLowerCase());
 
-          if (!website.startsWith('http')) {
-            website = `https://www.google.com/search?q=${encodeURIComponent(name + ' ' + cleanLoc)}`;
+            const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (historyKeys.has(nameKey)) continue;
+
+            const extratags = item.extratags || {};
+            let phone = extratags.phone || extratags['contact:phone'] || extratags.mobile || extractIndianPhone(JSON.stringify(item));
+            let website = extratags.website || extratags['contact:website'] || extratags.url || 'N/A';
+            let email = extratags.email || extratags['contact:email'] || extractEmail(JSON.stringify(item));
+
+            if (!website.startsWith('http')) {
+              website = `https://www.google.com/search?q=${encodeURIComponent(name + ' ' + cleanLoc)}`;
+            }
+
+            results.push({
+              Name: name,
+              Niche: niche,
+              Location: location,
+              Phone: phone,
+              Email: email,
+              Website: website,
+              Ratings: '4.8/5.0',
+              Source: 'Google Maps'
+            });
+
+            logCallback(`Extracted Real Business (${results.length}/${maxResults}): ${name}`);
           }
-
-          results.push({
-            Name: name,
-            Niche: niche,
-            Location: location,
-            Phone: phone,
-            Email: email,
-            Website: website,
-            Ratings: '4.8/5.0',
-            Source: 'Google Maps'
-          });
-
-          logCallback(`Extracted Real Business (${results.length}/${maxResults}): ${name}`);
         }
       }
     }
@@ -148,9 +161,8 @@ async function scrapeOpenStreetMap(
 }
 
 /**
- * Real Live Search Engine Dorking Engine.
- * Extracts real live profiles, business names, website links, phone numbers, and emails.
- * Zero synthetic or preset dummy data!
+ * Real Live Search Engine Dorking Engine with Multi-Page Harvesting.
+ * Iterates through multiple search pages to fulfill requested lead count (e.g., 50 leads).
  */
 async function scrapeSearchDork(
   dorkQuery: string,
@@ -162,96 +174,45 @@ async function scrapeSearchDork(
   historyKeys: Set<string>,
   logCallback: (msg: string) => void
 ): Promise<ScrapedBusiness[]> {
-  logCallback(`Executing Live Search (Page ${pageOffset + 1}) on ${platformName}: ${dorkQuery}`);
+  logCallback(`Executing Multi-Page Live Search on ${platformName}: ${dorkQuery}`);
   const results: ScrapedBusiness[] = [];
   const seenUrls = new Set<string>();
-  const offset = pageOffset * 15;
 
-  // 1. Live Bing Search
-  try {
-    const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(dorkQuery)}&first=${offset + 1}&count=30`;
-    const res = await fetch(bingUrl, {
-      headers: {
-        'User-Agent': DEFAULT_USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9'
-      }
-    });
+  // Iterate up to 4 search pages to collect requested maxResults
+  for (let page = 0; page < 4; page++) {
+    if (results.length >= maxResults) break;
+    const currentOffset = (pageOffset + page) * 15;
 
-    if (res.ok) {
-      const html = await res.text();
-      const $ = cheerio.load(html);
-
-      $('.b_algo').each((_, el) => {
-        if (results.length >= maxResults) return false;
-        
-        const titleEl = $(el).find('h2 a');
-        const title = titleEl.text().trim();
-        const url = titleEl.attr('href') || '';
-        const snippet = $(el).find('.b_caption p, .b_algoSlug').text().trim();
-
-        if (url && !seenUrls.has(url)) {
-          seenUrls.add(url);
-          const name = cleanTitle(title);
-          if (!name || name.length < 3 || name.toLowerCase().includes('definition') || name.toLowerCase().includes('meaning')) return;
-
-          const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (historyKeys.has(nameKey)) return;
-
-          let combinedText = `${title} ${snippet}`;
-          let phone = extractIndianPhone(combinedText);
-          let email = extractEmail(combinedText);
-
-          results.push({
-            Name: name,
-            Niche: niche,
-            Location: location,
-            Phone: phone,
-            Email: email,
-            Website: url.startsWith('http') ? url : 'N/A',
-            Ratings: '4.8/5.0',
-            Source: platformName
-          });
-          logCallback(`Extracted Real Lead (${results.length}/${maxResults}): ${name}`);
+    // 1. Live Bing Search Page
+    try {
+      const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(dorkQuery)}&first=${currentOffset + 1}&count=30`;
+      const res = await fetch(bingUrl, {
+        headers: {
+          'User-Agent': DEFAULT_USER_AGENT,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9'
         }
       });
-    }
-  } catch (e: any) {
-    logCallback(`Bing Dork Warning: ${e.message}`);
-  }
 
-  // 2. Live DuckDuckGo Lite Search
-  if (results.length < maxResults) {
-    try {
-      const ddgRes = await fetch('https://lite.duckduckgo.com/lite/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': DEFAULT_USER_AGENT
-        },
-        body: `q=${encodeURIComponent(dorkQuery)}&s=${offset}`
-      });
-
-      if (ddgRes.ok) {
-        const html = await ddgRes.text();
+      if (res.ok) {
+        const html = await res.text();
         const $ = cheerio.load(html);
 
-        const snippets = $('.result-snippet').toArray();
-        for (const el of snippets) {
-          if (results.length >= maxResults) break;
-          const parentRow = $(el).closest('tr').prev();
-          const link = parentRow.find('.result-link');
-          const title = link.text().trim();
-          const url = link.attr('href') || '';
-          const snippet = $(el).text().trim();
+        $('.b_algo').each((_, el) => {
+          if (results.length >= maxResults) return false;
+          
+          const titleEl = $(el).find('h2 a');
+          const title = titleEl.text().trim();
+          const url = titleEl.attr('href') || '';
+          const snippet = $(el).find('.b_caption p, .b_algoSlug').text().trim();
 
           if (url && !seenUrls.has(url)) {
             seenUrls.add(url);
             const name = cleanTitle(title);
-            if (!name || name.length < 3 || name.toLowerCase().includes('definition') || name.toLowerCase().includes('meaning')) continue;
+            if (!name || name.length < 3 || name.toLowerCase().includes('definition') || name.toLowerCase().includes('meaning')) return;
 
             const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (historyKeys.has(nameKey)) continue;
+            if (historyKeys.has(nameKey)) return;
 
             let combinedText = `${title} ${snippet}`;
             let phone = extractIndianPhone(combinedText);
@@ -264,25 +225,81 @@ async function scrapeSearchDork(
               Phone: phone,
               Email: email,
               Website: url.startsWith('http') ? url : 'N/A',
-              Ratings: '4.7/5.0',
+              Ratings: '4.8/5.0',
               Source: platformName
             });
             logCallback(`Extracted Real Lead (${results.length}/${maxResults}): ${name}`);
           }
-        }
+        });
       }
     } catch (e: any) {
-      logCallback(`DuckDuckGo Warning: ${e.message}`);
+      logCallback(`Bing Dork Page ${page + 1} Warning: ${e.message}`);
+    }
+
+    // 2. Live DuckDuckGo Lite Page if needed
+    if (results.length < maxResults) {
+      try {
+        const ddgRes = await fetch('https://lite.duckduckgo.com/lite/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': DEFAULT_USER_AGENT
+          },
+          body: `q=${encodeURIComponent(dorkQuery)}&s=${currentOffset}`
+        });
+
+        if (ddgRes.ok) {
+          const html = await ddgRes.text();
+          const $ = cheerio.load(html);
+
+          const snippets = $('.result-snippet').toArray();
+          for (const el of snippets) {
+            if (results.length >= maxResults) break;
+            const parentRow = $(el).closest('tr').prev();
+            const link = parentRow.find('.result-link');
+            const title = link.text().trim();
+            const url = link.attr('href') || '';
+            const snippet = $(el).text().trim();
+
+            if (url && !seenUrls.has(url)) {
+              seenUrls.add(url);
+              const name = cleanTitle(title);
+              if (!name || name.length < 3 || name.toLowerCase().includes('definition') || name.toLowerCase().includes('meaning')) continue;
+
+              const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (historyKeys.has(nameKey)) continue;
+
+              let combinedText = `${title} ${snippet}`;
+              let phone = extractIndianPhone(combinedText);
+              let email = extractEmail(combinedText);
+
+              results.push({
+                Name: name,
+                Niche: niche,
+                Location: location,
+                Phone: phone,
+                Email: email,
+                Website: url.startsWith('http') ? url : 'N/A',
+                Ratings: '4.7/5.0',
+                Source: platformName
+              });
+              logCallback(`Extracted Real Lead (${results.length}/${maxResults}): ${name}`);
+            }
+          }
+        }
+      } catch (e: any) {
+        logCallback(`DuckDuckGo Warning: ${e.message}`);
+      }
     }
   }
 
-  // 3. OpenStreetMap Live Directory Provider Fallback
-  if (results.length === 0) {
-    const osmLeads = await scrapeOpenStreetMap(niche, location, maxResults, historyKeys, logCallback);
+  // 3. OpenStreetMap Directory Fallback if needed to fulfill requested target count
+  if (results.length < maxResults) {
+    const osmLeads = await scrapeOpenStreetMap(niche, location, maxResults - results.length, historyKeys, logCallback);
     results.push(...osmLeads);
   }
 
-  logCallback(`Completed Live Search for ${platformName}. Extracted ${results.length} real leads.`);
+  logCallback(`Completed Multi-Page Live Search for ${platformName}. Extracted ${results.length} real leads.`);
   return results;
 }
 
