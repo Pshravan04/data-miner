@@ -7,28 +7,26 @@
   --font-arcade: 'VT323', monospace;
   --font-sans: 'Outfit', sans-serif;
   
-  --bg-dark: #0D0C0A;
-  --bg-card: #181510;
-  --bg-card-hover: #221D15;
+  --bg-light: #FFFDF5;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #FEF9C3;
   
-  --accent-yellow: #FFC700;
-  --accent-yellow-light: #FFE066;
-  --accent-orange: #FF5500;
-  --accent-orange-bright: #FF7700;
-  --accent-amber: #F59E0B;
+  --accent-yellow: #F59E0B;
+  --accent-yellow-bright: #FBBF24;
+  --accent-orange: #EA580C;
+  --accent-orange-bright: #F97316;
+  --accent-amber: #D97706;
   
-  --pixel-border-yellow: #FFC700;
-  --pixel-border-orange: #FF5500;
   --pixel-shadow: 4px 4px 0px #000000;
 }
 
 body {
-  background-color: var(--bg-dark);
-  color: #F3F4F6;
+  background-color: var(--bg-light);
+  color: #1F2937;
   font-family: var(--font-sans);
   background-image: 
-    radial-gradient(rgba(255, 199, 0, 0.07) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(13, 12, 10, 0.95), rgba(13, 12, 10, 0.98));
+    radial-gradient(rgba(234, 88, 12, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, #FFFDF5, #FFF7ED);
   background-size: 24px 24px, 100% 100%;
 }
 
@@ -45,34 +43,33 @@ body {
   font-family: var(--font-arcade);
 }
 
-/* Pixel Art Borders & Hard Shadows */
+/* Pixel Art Borders & Hard Shadows for Light Theme */
 .pixel-box {
-  background-color: var(--bg-card);
-  border: 3px solid var(--accent-orange);
-  box-shadow: 5px 5px 0px #000000;
-  position: relative;
+  background-color: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 5px 5px 0px #EA580C;
 }
 
 .pixel-box-yellow {
-  background-color: var(--bg-card);
-  border: 3px solid var(--accent-yellow);
-  box-shadow: 5px 5px 0px #000000;
+  background-color: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 5px 5px 0px #F59E0B;
 }
 
 .pixel-button-yellow {
-  background-color: var(--accent-yellow);
+  background-color: #FBBF24;
   color: #000000;
   font-family: var(--font-silkscreen);
   font-weight: 700;
   border: 3px solid #000000;
-  box-shadow: 4px 4px 0px #FF5500;
+  box-shadow: 4px 4px 0px #EA580C;
   transition: all 0.1s ease-in-out;
 }
 
 .pixel-button-yellow:hover:not(:disabled) {
   transform: translate(2px, 2px);
-  box-shadow: 2px 2px 0px #FF5500;
-  background-color: var(--accent-yellow-light);
+  box-shadow: 2px 2px 0px #EA580C;
+  background-color: #F59E0B;
 }
 
 .pixel-button-yellow:active:not(:disabled) {
@@ -81,23 +78,23 @@ body {
 }
 
 .pixel-button-orange {
-  background-color: var(--accent-orange);
+  background-color: #EA580C;
   color: #FFFFFF;
   font-family: var(--font-silkscreen);
   font-weight: 700;
   border: 3px solid #000000;
-  box-shadow: 4px 4px 0px #FFC700;
+  box-shadow: 4px 4px 0px #F59E0B;
   transition: all 0.1s ease-in-out;
 }
 
 .pixel-button-orange:hover:not(:disabled) {
   transform: translate(2px, 2px);
-  box-shadow: 2px 2px 0px #FFC700;
-  background-color: var(--accent-orange-bright);
+  box-shadow: 2px 2px 0px #F59E0B;
+  background-color: #C2410C;
 }
 
 .pixel-badge-yellow {
-  background: linear-gradient(135deg, #FFC700 0%, #FF9900 100%);
+  background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
   color: #000000;
   font-family: var(--font-silkscreen);
   font-weight: 700;
@@ -106,21 +103,12 @@ body {
 }
 
 .pixel-badge-orange {
-  background: linear-gradient(135deg, #FF5500 0%, #CC3300 100%);
+  background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%);
   color: #FFFFFF;
   font-family: var(--font-silkscreen);
   font-weight: 700;
   border: 2px solid #000000;
   box-shadow: 2px 2px 0px #000000;
-}
-
-/* Scanline Effect for Terminal */
-.scanlines {
-  background: linear-gradient(
-    rgba(18, 16, 12, 0) 50%, 
-    rgba(0, 0, 0, 0.4) 50%
-  );
-  background-size: 100% 4px;
 }
 
 /* Custom Scrollbar */
@@ -129,9 +117,9 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #181510;
+  background: #FEF3C7;
 }
 ::-webkit-scrollbar-thumb {
-  background: #FF5500;
+  background: #EA580C;
   border: 2px solid #000000;
 }
