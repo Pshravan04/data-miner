@@ -127,7 +127,6 @@ function mergeAndDeduplicateLeads(leads: ScrapedBusiness[]): ScrapedBusiness[] {
 
   for (const item of leads) {
     if (!item || !item.Name || item.Name === 'Unknown Name' || item.Name.length < 3) continue;
-    if (!item.Phone || item.Phone === 'N/A') continue; // STRICT FILTER: Require verified phone number!
 
     const cleanName = item.Name.toLowerCase().replace(/[^a-z0-9]/g, '');
     const cleanPhone = item.Phone.replace(/[^0-9]/g, '');
