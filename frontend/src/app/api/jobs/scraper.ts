@@ -119,6 +119,27 @@ function cleanTitle(rawTitle: string): string {
 }
 
 /**
+ * Rejects generic non-business pages or noise from search engines.
+ */
+function isGenericBusinessName(name: string): boolean {
+  if (!name || name.length < 3 || name.length > 80) return true;
+  const lower = name.toLowerCase();
+  
+  const genericKeywords = [
+    'wikipedia', 'dictionary', 'definition', 'meaning', 'realtor.com',
+    'real madrid', 'real daytime', 'designer clothes', 'buy & sell',
+    'regulatory authority', 'rera', 'about us', 'contact us', 'home page',
+    'terms of service', 'privacy policy', 'facebook', 'instagram', 'linkedin',
+    'pinterest', 'youtube', 'twitter', 'mercedes', 'official site', 'global',
+    'world wide', 'news', 'career', 'job search', 'hiring', 'recruitment',
+    'how to', 'guide', 'news', 'blog', 'forum', 'thread', 'sign up', 'login'
+  ];
+
+  if (lower === 'real' || lower === 'estate' || lower === 'agent' || lower === 'agents' || lower.includes('real estate property & homes')) return true;
+  return genericKeywords.some(keyword => lower.includes(keyword));
+}
+
+/**
  * Targeted Deep Contact Search using sequential multi-engine fallbacks (Yahoo -> Bing).
  */
 async function enrichMissingPhone(name: string, location: string): Promise<{ phone: string; email: string }> {
@@ -192,7 +213,7 @@ export async function scrapeOverpassAPI(
         if (!rawName || rawName.length < 3) continue;
 
         const name = cleanTitle(rawName);
-        if (!name || name.length < 3 || seenNames.has(name.toLowerCase())) continue;
+        if (!name || isGenericBusinessName(name) || seenNames.has(name.toLowerCase())) continue;
 
         const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (historyKeys.has(nameKey)) continue;
@@ -287,7 +308,7 @@ export async function scrapeOpenStreetMap(
 
                 const rawName = item.display_name ? item.display_name.split(',')[0].trim() : '';
                 const name = cleanTitle(rawName);
-                if (!name || name.length < 3 || seenNames.has(name.toLowerCase())) continue;
+                if (!name || isGenericBusinessName(name) || seenNames.has(name.toLowerCase())) continue;
 
                 const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
                 if (historyKeys.has(nameKey)) continue;
@@ -385,7 +406,7 @@ async function scrapeSearchDork(
           if (url && !seenUrls.has(url)) {
             seenUrls.add(url);
             const name = cleanTitle(title);
-            if (!name || name.length < 3 || name.toLowerCase().includes('definition') || name.toLowerCase().includes('meaning') || name.toLowerCase() === 'real' || name.toLowerCase().includes('wikipedia')) continue;
+            if (isGenericBusinessName(name)) continue;
 
             const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
             if (historyKeys.has(nameKey)) continue;
