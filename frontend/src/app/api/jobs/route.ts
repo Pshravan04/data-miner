@@ -1,43 +1,42 @@
 import { NextResponse } from 'next/server';
-import { scrapeGoogleMaps, scrapeInstagram, scrapeFacebook, scrapeLinkedIn, scrapeJustdial, scrapeYellowPages, ScrapedBusiness } from './scraper';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { 
+  ScrapedBusiness,
+  scrapeInstagram,
+  scrapeFacebook,
+  scrapeLinkedIn,
+  scrapeJustdial,
+  scrapeGoogleMaps,
+  scrapeYellowPages,
+  scrapeOpenStreetMap,
+  scrapeOverpassAPI
+} from './scraper';
 
-export const maxDuration = 60;
-
-export const jobsStore: Record<string, any> = {};
+// Simple in-memory jobs store for progress logs and offset increments
+const jobsStore: Record<string, any> = {};
 
 function getJobFilePath(jobId: string) {
-  const safeJobId = String(jobId).replace(/[^a-zA-Z0-9_-]/g, '');
-  return path.join(os.tmpdir(), `data_miner_job_${safeJobId}.json`);
+  return path.join(os.tmpdir(), `data_miner_job_${jobId}.json`);
 }
 
-function writeJobState(jobId: string, data: any) {
-  jobsStore[jobId] = data;
+function writeJobState(jobId: string, state: any) {
   try {
-    fs.writeFileSync(getJobFilePath(jobId), JSON.stringify(data), 'utf-8');
+    fs.writeFileSync(getJobFilePath(jobId), JSON.stringify(state), 'utf-8');
   } catch (e) {}
 }
 
-function readJobState(jobId: string): any {
-  if (jobsStore[jobId]) return jobsStore[jobId];
+function readJobState(jobId: string) {
   try {
     const filePath = getJobFilePath(jobId);
     if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const parsed = JSON.parse(content);
-      jobsStore[jobId] = parsed;
-      return parsed;
+      return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     }
   } catch (e) {}
   return null;
 }
 
-/**
- * Persistent Search History Store per Niche + Location.
- * Ensures previously extracted leads are never repeated in subsequent searches.
- */
 function getHistoryFilePath(niche: string, location: string) {
   const cleanNiche = niche.toLowerCase().replace(/[^a-z0-9]/g, '');
   const cleanLoc = location.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -108,36 +107,42 @@ export async function POST(request: Request) {
       });
     } else {
       runAgentCrew(jobId, niche, location, platforms, maxResults);
-      return NextResponse.json({ jobId, status: 'processing' });
+      return NextResponse.json({ jobId, status: 'processing', progress: 'Job started.' });
     }
-  } catch (error: any) {
-    console.error('Error starting job:', error);
-    return NextResponse.json({ error: error.message || 'Failed to initialize extraction job.' }, { status: 500 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
-/**
- * Merges lead profiles found across multiple platform scrapers.
- * Groups by normalized business name or phone number, combines missing contact details,
- * and sets the Source field to a multi-source list (e.g., "Google Maps, Instagram, Facebook").
- * Strictly filters out any leads without a valid phone number.
- */
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const jobId = searchParams.get('jobId');
+
+  if (!jobId) {
+    return NextResponse.json({ error: 'Missing jobId parameter' }, { status: 400 });
+  }
+
+  const state = readJobState(jobId);
+  if (!state) {
+    return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(state);
+}
+
 function mergeAndDeduplicateLeads(leads: ScrapedBusiness[]): ScrapedBusiness[] {
   const mergedMap = new Map<string, ScrapedBusiness>();
 
   for (const item of leads) {
-    if (!item || !item.Name || item.Name === 'Unknown Name' || item.Name.length < 3) continue;
+    if (!item.Name || !item.Phone || item.Phone === 'N/A') continue;
+    const normPhone = item.Phone.replace(/[^0-9]/g, '');
+    const normName = item.Name.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    const cleanName = item.Name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const cleanPhone = item.Phone.replace(/[^0-9]/g, '');
-    
-    const key = (cleanPhone && cleanPhone.length > 7) ? cleanPhone : cleanName;
-
-    if (!mergedMap.has(key)) {
-      mergedMap.set(key, { ...item });
+    const matchKey = normPhone || normName;
+    if (!mergedMap.has(matchKey)) {
+      mergedMap.set(matchKey, { ...item });
     } else {
-      const existing = mergedMap.get(key)!;
-
+      const existing = mergedMap.get(matchKey)!;
       const sourcesSet = new Set(existing.Source.split(',').map(s => s.trim()).filter(Boolean));
       item.Source.split(',').map(s => s.trim()).filter(Boolean).forEach(s => sourcesSet.add(s));
       existing.Source = Array.from(sourcesSet).join(', ');
@@ -167,12 +172,11 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
   try {
     await new Promise(resolve => setTimeout(resolve, 200));
     
-    // Read history memory for this Niche + Location to calculate page offset and skip previous leads
     const historyKeys = readHistoryKeys(niche, location);
     const searchIterKey = `iter_${niche}_${location}`.toLowerCase().replace(/[^a-z0-9]/g, '');
     const currentIter = (jobsStore[searchIterKey] || 0);
     const pageOffset = currentIter;
-    jobsStore[searchIterKey] = currentIter + 1; // Increment page offset for next search run!
+    jobsStore[searchIterKey] = currentIter + 1;
     
     if (historyKeys.size > 0) {
       log(`Memory Check: Found ${historyKeys.size} previously extracted leads for ${niche} in ${location}. Navigating to Deep Search Page ${pageOffset + 1}...`);
@@ -182,35 +186,59 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
     
     let rawLeads: ScrapedBusiness[] = [];
 
-    if (platforms.includes('All Platforms')) {
-      log(`Triggering search dork agents across Instagram, Facebook, LinkedIn, Justdial, Google Maps, and YellowPages...`);
+    // STEP 1: Sequential OpenStreetMap & Overpass Directory Queries
+    try {
+      log(`Querying sequential OpenStreetMap database layer to extract verified directory nodes...`);
+      const osmData = await scrapeOpenStreetMap(niche, location, maxResults, historyKeys, log);
+      rawLeads.push(...osmData);
       
-      const [mapsData, instaData, fbData, liData, jdData, ypData] = await Promise.all([
-        scrapeGoogleMaps(niche, location, maxResults, pageOffset, historyKeys, log),
-        scrapeInstagram(niche, location, maxResults, pageOffset, historyKeys, log),
-        scrapeFacebook(niche, location, maxResults, pageOffset, historyKeys, log),
-        scrapeLinkedIn(niche, location, maxResults, pageOffset, historyKeys, log),
-        scrapeJustdial(niche, location, maxResults, pageOffset, historyKeys, log),
-        scrapeYellowPages(niche, location, maxResults, pageOffset, historyKeys, log)
-      ]);
-      
-      rawLeads = [...mapsData, ...instaData, ...fbData, ...liData, ...jdData, ...ypData];
-    } else {
-      log(`Triggering search dork agents for selected platforms: ${platforms.join(', ')}...`);
-      const tasks: Promise<ScrapedBusiness[]>[] = [];
-      if (platforms.includes('Google Maps')) tasks.push(scrapeGoogleMaps(niche, location, maxResults, pageOffset, historyKeys, log));
-      if (platforms.includes('Instagram')) tasks.push(scrapeInstagram(niche, location, maxResults, pageOffset, historyKeys, log));
-      if (platforms.includes('Facebook')) tasks.push(scrapeFacebook(niche, location, maxResults, pageOffset, historyKeys, log));
-      if (platforms.includes('LinkedIn')) tasks.push(scrapeLinkedIn(niche, location, maxResults, pageOffset, historyKeys, log));
-      if (platforms.includes('Justdial')) tasks.push(scrapeJustdial(niche, location, maxResults, pageOffset, historyKeys, log));
-      if (platforms.includes('YellowPages')) tasks.push(scrapeYellowPages(niche, location, maxResults, pageOffset, historyKeys, log));
+      if (rawLeads.length < maxResults) {
+        log(`Querying high-volume Overpass API spatial engine for additional real business nodes...`);
+        const overpassData = await scrapeOverpassAPI(niche, location, maxResults - rawLeads.length, historyKeys, log);
+        rawLeads.push(...overpassData);
+      }
+    } catch (e: any) {
+      log(`Directory query warning: ${e.message}`);
+    }
 
-      const platformResults = await Promise.all(tasks);
-      rawLeads = platformResults.flat();
+    // STEP 2: Sequential Scraper execution with random delay gaps to prevent IP rate-limiting
+    if (rawLeads.length < maxResults) {
+      const remainingCount = maxResults - rawLeads.length;
+      log(`Needs ${remainingCount} more leads. Executing sequential search engine fallbacks...`);
+
+      const targets = platforms.includes('All Platforms') 
+        ? ['Google Maps', 'Instagram', 'Facebook', 'LinkedIn', 'Justdial', 'YellowPages']
+        : platforms;
+
+      for (const target of targets) {
+        if (rawLeads.length >= maxResults) break;
+        log(`Starting extraction fallback on platform: ${target}...`);
+        
+        let platformLeads: ScrapedBusiness[] = [];
+        const limit = maxResults - rawLeads.length;
+
+        if (target === 'Google Maps') {
+          platformLeads = await scrapeGoogleMaps(niche, location, limit, pageOffset, historyKeys, log);
+        } else if (target === 'Instagram') {
+          platformLeads = await scrapeInstagram(niche, location, limit, pageOffset, historyKeys, log);
+        } else if (target === 'Facebook') {
+          platformLeads = await scrapeFacebook(niche, location, limit, pageOffset, historyKeys, log);
+        } else if (target === 'LinkedIn') {
+          platformLeads = await scrapeLinkedIn(niche, location, limit, pageOffset, historyKeys, log);
+        } else if (target === 'Justdial') {
+          platformLeads = await scrapeJustdial(niche, location, limit, pageOffset, historyKeys, log);
+        } else if (target === 'YellowPages') {
+          platformLeads = await scrapeYellowPages(niche, location, limit, pageOffset, historyKeys, log);
+        }
+
+        rawLeads.push(...platformLeads);
+        // Small delay gap between platforms to protect IP health
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
     }
 
     log(`Enriching and verifying phone contact numbers for ${rawLeads.length} raw leads...`);
-    const mergedLeads = mergeAndDeduplicateLeads(rawLeads);
+    const mergedLeads = mergeAndDeduplicateLeads(rawLeads).slice(0, maxResults);
 
     // Save newly extracted lead keys to history store
     const newKeysToSave: string[] = [];
@@ -218,35 +246,19 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
       if (item.Name) newKeysToSave.push(item.Name.toLowerCase().replace(/[^a-z0-9]/g, ''));
       if (item.Phone && item.Phone !== 'N/A') newKeysToSave.push(item.Phone.replace(/[^0-9]/g, ''));
     });
-    writeHistoryKeys(niche, location, newKeysToSave);
+    if (newKeysToSave.length > 0) {
+      writeHistoryKeys(niche, location, newKeysToSave);
+    }
 
-    state.resultData = mergedLeads;
     state.status = 'completed';
-    state.progress = 'Job completed successfully.';
+    state.progress = `Process finished successfully. Extracted ${mergedLeads.length} NEW verified phone leads.`;
+    state.resultData = mergedLeads;
     writeJobState(jobId, state);
-
-    log(`Process finished successfully. Extracted ${mergedLeads.length} NEW verified phone leads.`);
-
-  } catch (error: any) {
+    console.log(`[Job ${jobId}] Job finished successfully. Extracted ${mergedLeads.length} leads.`);
+  } catch (err: any) {
     state.status = 'failed';
-    state.progress = `Error: ${error.message}`;
+    state.progress = `Extraction failed: ${err.message}`;
+    state.logs.push(`Error: ${err.message}`);
     writeJobState(jobId, state);
-    log(`Error: ${error.message}`);
   }
-}
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const jobId = searchParams.get('jobId');
-
-  if (!jobId) {
-    return NextResponse.json({ error: 'Missing jobId parameter' }, { status: 400 });
-  }
-
-  const job = readJobState(jobId);
-  if (!job) {
-    return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-  }
-
-  return NextResponse.json(job);
 }
