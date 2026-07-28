@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       : ['Google Maps'];
 
     const rawMax = typeof body.maxResults === 'number' && body.maxResults > 0 ? body.maxResults : 50;
-    const maxResults = Math.min(Math.max(1, rawMax), 200);
+    const maxResults = Math.min(Math.max(1, rawMax), 5000);
 
     const jobId = Math.random().toString(36).substring(2, 15);
     
