@@ -61,7 +61,7 @@ function writeHistoryLeads(niche: string, location: string, newLeads: ScrapedBus
     const existing = readHistoryLeads(niche, location);
     const combined = [...existing];
     for (const lead of newLeads) {
-      if (!combined.some(x => x.Name === lead.Name || x.Phone === lead.Phone)) {
+      if (!combined.some(x => x.Name === lead.Name || (lead.Phone && lead.Phone !== 'N/A' && x.Phone === lead.Phone))) {
         combined.push(lead);
       }
     }
@@ -145,21 +145,32 @@ export async function GET(request: Request) {
 
 function mergeAndDeduplicateLeads(leads: ScrapedBusiness[]): ScrapedBusiness[] {
   const mergedMap = new Map<string, ScrapedBusiness>();
+  const seenPhones = new Set<string>();
 
   for (const item of leads) {
-    if (!item.Name || !item.Phone || item.Phone === 'N/A') continue;
-    const normPhone = item.Phone.replace(/[^0-9]/g, '');
+    if (!item.Name) continue;
     const normName = item.Name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!normName) continue;
 
-    const matchKey = normPhone || normName;
-    if (!mergedMap.has(matchKey)) {
-      mergedMap.set(matchKey, { ...item });
+    // Check phone-based duplicate (only for leads that have a real phone)
+    const normPhone = (item.Phone && item.Phone !== 'N/A') ? item.Phone.replace(/[^0-9]/g, '') : '';
+    if (normPhone && seenPhones.has(normPhone)) continue;
+
+    // Use name as the primary dedup key
+    if (!mergedMap.has(normName)) {
+      mergedMap.set(normName, { ...item });
+      if (normPhone) seenPhones.add(normPhone);
     } else {
-      const existing = mergedMap.get(matchKey)!;
+      const existing = mergedMap.get(normName)!;
       const sourcesSet = new Set(existing.Source.split(',').map(s => s.trim()).filter(Boolean));
       item.Source.split(',').map(s => s.trim()).filter(Boolean).forEach(s => sourcesSet.add(s));
       existing.Source = Array.from(sourcesSet).join(', ');
 
+      // Merge in better data if existing is missing it
+      if ((!existing.Phone || existing.Phone === 'N/A') && item.Phone && item.Phone !== 'N/A') {
+        existing.Phone = item.Phone;
+        if (normPhone) seenPhones.add(normPhone);
+      }
       if ((!existing.Website || existing.Website === 'N/A') && item.Website && item.Website !== 'N/A') {
         existing.Website = item.Website;
       }
@@ -246,15 +257,18 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
         } else if (target === 'YellowPages') {
           platformLeads = await scrapeYellowPages(niche, location, limit, pageOffset, historyKeys, log);
         }
-
+        
+        log(`[DEBUG PIPELINE] Raw results found on platform ${target} before dedup: ${platformLeads.length}`);
         rawLeads.push(...platformLeads);
         // Small delay gap between platforms to protect IP health
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
     }
 
+    log(`[DEBUG PIPELINE] Total raw leads before dedup: ${rawLeads.length}`);
     log(`Enriching and verifying phone contact numbers for ${rawLeads.length} raw leads...`);
     let mergedLeads = mergeAndDeduplicateLeads(rawLeads);
+    log(`[DEBUG PIPELINE] Results after dedup/filtering: ${mergedLeads.length}`);
 
     // Call dynamic website contact enrichment on the final list of leads
     log(`Running background contact enrichment on discovered business websites...`);
@@ -271,6 +285,7 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
         }
       })
     );
+    console.log(`[DEBUG PIPELINE] Results after enrichment: ${mergedLeads.length}`);
 
     // Save newly extracted leads to the history database
     if (mergedLeads.length > 0) {
@@ -286,7 +301,7 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
       let added = 0;
       for (const hist of historyLeads) {
         if (added >= needed) break;
-        if (!mergedLeads.some(l => l.Name === hist.Name || l.Phone === hist.Phone)) {
+        if (!mergedLeads.some(l => l.Name === hist.Name || (hist.Phone && hist.Phone !== 'N/A' && l.Phone === hist.Phone))) {
           mergedLeads.push(hist);
           added++;
         }
@@ -294,6 +309,7 @@ async function runAgentCrew(jobId: string, niche: string, location: string, plat
     }
 
     mergedLeads = mergedLeads.slice(0, maxResults);
+    console.log(`[DEBUG PIPELINE] Final array length in API response: ${mergedLeads.length}`);
 
     state.status = 'completed';
     state.progress = `Process finished successfully. Extracted ${mergedLeads.length} NEW verified phone leads.`;

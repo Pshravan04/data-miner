@@ -160,11 +160,19 @@ async function enrichMissingPhone(name: string, location: string): Promise<{ pho
           'User-Agent': DEFAULT_USER_AGENT,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
         }
-      }, 3000);
+      }, 800);
       if (res.ok) {
         const html = await res.text();
         const $ = cheerio.load(html);
-        const snippetText = $('body').text();
+        
+        // Target search result snippets specifically to avoid generic header/footer phone numbers
+        let snippetText = '';
+        if (engine.name === 'Yahoo') {
+          snippetText = $('.algo, .compTitle, .compText').text();
+        } else {
+          snippetText = $('.b_algo, .b_ans').text();
+        }
+        
         const phone = extractIndianPhone(snippetText);
         const email = extractEmail(snippetText);
         if (phone !== 'N/A') {
@@ -283,8 +291,6 @@ export async function scrapeOverpassAPI(
             if (email === 'N/A' && enriched.email !== 'N/A') email = enriched.email;
           }
 
-          if (phone === 'N/A') continue;
-
           seenNames.add(name.toLowerCase());
           const website = tags.website || tags['contact:website'] || tags.url || `https://www.google.com/search?q=${encodeURIComponent(name + ' ' + cleanLoc)}`;
 
@@ -378,8 +384,6 @@ export async function scrapeOpenStreetMap(
                   if (email === 'N/A' && enriched.email !== 'N/A') email = enriched.email;
                 }
 
-                if (phone === 'N/A') continue;
-
                 seenNames.add(name.toLowerCase());
                 let website = extratags.website || extratags['contact:website'] || extratags.url || 'N/A';
 
@@ -430,8 +434,8 @@ async function scrapeSearchDork(
   const results: ScrapedBusiness[] = [];
   const seenUrls = new Set<string>();
 
-  // Continuous page harvesting loop up to 15 pages to find verified phone leads
-  for (let page = 0; page < 15; page++) {
+  // Continuous page harvesting loop up to 4 pages to find verified phone leads
+  for (let page = 0; page < 4; page++) {
     if (results.length >= maxResults) break;
     const currentOffset = (pageOffset + page) * 15;
 
@@ -476,9 +480,6 @@ async function scrapeSearchDork(
               if (email === 'N/A' && enriched.email !== 'N/A') email = enriched.email;
             }
 
-            // STRICT FILTER: Require phone number
-            if (phone === 'N/A') continue;
-
             results.push({
               Name: name,
               Niche: niche,
@@ -489,7 +490,7 @@ async function scrapeSearchDork(
               Ratings: '4.8/5.0',
               Source: platformName
             });
-            logCallback(`Extracted Lead with Phone (${results.length}/${maxResults}): ${name}`);
+            logCallback(`Extracted Lead (${results.length}/${maxResults}): ${name}`);
           }
         }
       }
