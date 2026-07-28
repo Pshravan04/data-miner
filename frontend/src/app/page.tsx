@@ -442,6 +442,26 @@ export default function Home() {
 
           </div>
         </div>
+
+        {/* Pixel Footer Credit */}
+        <footer className="mt-12 pt-6 border-t-2 border-dashed border-gray-300 text-center font-silkscreen text-xs text-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 bg-[#EA580C] inline-block border border-black"></span>
+            <span>DATA MINER B2B ENGINE v2.0</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-white border-2 border-black px-4 py-2 shadow-[3px_3px_0px_#F59E0B]">
+            <span>CRAFTED WITH ⚡ BY</span>
+            <a 
+              href="https://shravan-phutane-portfolio.netlify.app/" 
+              target="_blank" 
+              rel="noreferrer"
+              className="text-[#EA580C] font-bold underline hover:text-[#D97706] transition-colors ml-1"
+            >
+              SHRAVAN PHUTANE
+            </a>
+          </div>
+        </footer>
+
       </div>
     </div>
   );
