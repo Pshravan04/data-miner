@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Data Miner ⚡ Multi-Agent B2B Lead Scraper & Directory Engine
 
-## Getting Started
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-FF5500?style=for-the-badge&logo=vercel&logoColor=white)](https://data-miner-ebon.vercel.app/)
+[![Framework](https://img.shields.io/badge/Next.js-16.2-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
-First, run the development server:
+> **Data Miner** is an 8-bit Pixel Arcade style B2B lead extraction dashboard. It deploys multi-agent bots across 20+ directory platforms simultaneously, deduplicates contact records, enriches company profiles, and generates instant Excel `.xlsx` spreadsheets for sales outreach.
 
+Designed and Developed by **[Shravan Phutane](https://shravan-phutane-portfolio.netlify.app/)**.
+
+---
+
+## 🌐 Live Production Application
+🔗 **[https://data-miner-ebon.vercel.app/](https://data-miner-ebon.vercel.app/)**
+
+---
+
+## ⚡ Key Features
+
+* 🎮 **Pixel Light Arcade Aesthetic**: Retro 8-bit UI styled in warm yellow and vibrant orange shades with `Press Start 2P` pixel fonts, tactile push buttons, and a CRT activity log screen.
+* 🌐 **Multi-Directory Mining**: Extracts B2B leads across **Google Maps, YellowPages, Yelp, TripAdvisor, Zillow, LinkedIn, and Apollo.io**.
+* ⚡ **All Platforms Quick-Select**: Single-click button to launch parallel scrapers across all directories simultaneously.
+* 🔗 **Multi-Source Deduplication**: Automatically merges matching business entries by name or phone, filling in missing contact details (Phone, Email, Website) and listing all matching platforms in the `Source` column (e.g. `Google Maps, YellowPages, Yelp`).
+* 🛡️ **Zero-Failure Guarantee**: Intelligent fallback engine automatically routes to global OpenData directory APIs when browser binaries are absent on serverless hosts (Vercel), ensuring 100% successful lead extraction without crashes or blank sheets.
+* 📊 **In-App Data Preview Grid**: Displays extracted lead rows live on the dashboard with phone numbers, clickable website links, star ratings, and source tags.
+* 📥 **Instant Excel (.xlsx) Export**: Formats extracted leads into clean spreadsheet columns ready for cold email or CRM imports.
+
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx playwright install chromium
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Run Development Server
+```bash
+npm run dev
+```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 👨‍💻 Developer & Credits
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Crafted with ⚡ by **Shravan Phutane**.
+* **Portfolio**: [shravan-phutane-portfolio.netlify.app](https://shravan-phutane-portfolio.netlify.app/)
+* **GitHub**: [@Pshravan04](https://github.com/Pshravan04)

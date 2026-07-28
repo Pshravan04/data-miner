@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Outer Pixel Border -->
+  <rect x="0" y="0" width="32" height="32" fill="#000000" rx="4"/>
+  <rect x="2" y="2" width="28" height="28" fill="#FFFDF5" rx="2"/>
+  <rect x="4" y="4" width="24" height="24" fill="#181510" rx="1"/>
+  
+  <!-- Pixelated Lightning Bolt (Yellow & Orange Arcade Glow) -->
+  <polygon points="18,5 10,17 16,17 13,27 23,13 17,13" fill="#FBBF24" stroke="#EA580C" stroke-width="1.5" stroke-linejoin="miter"/>
+  <polygon points="17,7 12,16 16,16 14,24 21,14 17,14" fill="#FFE066"/>
+</svg>
