@@ -58,7 +58,24 @@ export async function scrapeGoogleMaps(niche: string, location: string, maxResul
   if (onProgress) onProgress(`Launching headless browser...`);
   const browser = await chromium.launch({
     headless: true,
-    args: ['--disable-blink-features=AutomationControlled']
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage', // Prevent shared memory exhaustion in Docker
+      '--no-sandbox', // Required for some environments
+      '--disable-setuid-sandbox',
+      '--disable-gpu', // Disable GPU hardware acceleration
+      '--no-zygote',
+      '--single-process', // Run in a single process to save RAM
+      '--disable-background-networking',
+      '--disable-default-apps',
+      '--disable-extensions',
+      '--disable-sync',
+      '--disable-translate',
+      '--metrics-recording-only',
+      '--mute-audio',
+      '--no-first-run',
+      '--safebrowsing-disable-auto-update'
+    ]
   });
 
   const context = await browser.newContext({
@@ -68,6 +85,17 @@ export async function scrapeGoogleMaps(niche: string, location: string, maxResul
   });
 
   const page = await context.newPage();
+  
+  // Aggressively block images, fonts, and media to save RAM on free tier
+  await page.route('**/*', (route) => {
+    const type = route.request().resourceType();
+    if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
+      route.abort();
+    } else {
+      route.continue();
+    }
+  });
+
   const leads: ScrapedBusiness[] = [];
   const seenUrls = new Set<string>();
 
