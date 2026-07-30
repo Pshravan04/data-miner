@@ -143,15 +143,15 @@ export async function scrapeGoogleMaps(niche: string, location: string, maxResul
         }
       }
 
-      // Scroll down
-      const feed = await page.$('div[role="feed"]');
-      if (feed) {
-        await feed.evaluate((el: any) => el.scrollBy(0, 1000));
-        await sleep(1500); 
+      const feed = page.locator('div[role="feed"]');
+      if (await feed.count() > 0) {
+        await feed.evaluate((el: any) => el.scrollTo(0, el.scrollHeight));
+        await sleep(2000); 
         
         const currentHeight = await feed.evaluate((el: any) => el.scrollHeight);
         if (currentHeight === previousHeight) {
           unchangedScrolls++;
+          if (unchangedScrolls >= 8) break; // More tolerant scroll end
         } else {
           unchangedScrolls = 0;
           previousHeight = currentHeight;
@@ -169,10 +169,10 @@ export async function scrapeGoogleMaps(niche: string, location: string, maxResul
       const href = businessUrls[i];
       const detailPage = await context.newPage();
       
-      // Block images on detail page too
+      // Block ONLY heavy media, but allow images, fonts, and stylesheets so the detail pane JS runs properly
       await detailPage.route('**/*', (route) => {
         const type = route.request().resourceType();
-        if (['image', 'media', 'font', 'stylesheet'].includes(type) || route.request().url().includes('/maps/vt/')) {
+        if (['media', 'video'].includes(type) || route.request().url().includes('/maps/vt/')) {
           route.abort();
         } else {
           route.continue();
