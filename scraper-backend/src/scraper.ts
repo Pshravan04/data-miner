@@ -127,91 +127,19 @@ export async function scrapeGoogleMaps(niche: string, location: string, maxResul
 
     let previousHeight = 0;
     let unchangedScrolls = 0;
+    const businessUrls: string[] = [];
 
-    // Scroll to load all cards up to maxResults
-    while (leads.length < maxResults && unchangedScrolls < 4) {
+    // Scroll to load all cards up to maxResults and collect URLs
+    while (businessUrls.length < maxResults && unchangedScrolls < 4) {
       const cards = await page.$$('div[role="feed"] > div > div > a');
       
       for (const card of cards) {
-        if (leads.length >= maxResults) break;
+        if (businessUrls.length >= maxResults) break;
         const href = await card.getAttribute('href');
-        if (!href || seenUrls.has(href)) continue;
-        
-        seenUrls.add(href);
-        
-        // Option B: Click the card to get full detail pane
-        try {
-          await card.click();
-          await sleep(Math.floor(Math.random() * 1000) + 1500); // Random human delay
-          
-          // Wait for detail pane title to load
-          await page.waitForSelector('h1', { timeout: 5000 });
-          
-          const name = await page.locator('h1').innerText().catch(() => '');
-          if (!name) continue;
-
-          // Extract basic info from the detail pane
-          let address = 'N/A';
-          let website = null;
-          let phone = null;
-          let rating: number | null = null;
-          let reviewCount: number | null = null;
-          let category = 'N/A';
-
-          // Look through the buttons/info rows in the detail pane
-          const infoButtons = await page.$$('button[data-item-id]');
-          for (const btn of infoButtons) {
-            const id = await btn.getAttribute('data-item-id');
-            const text = await btn.innerText();
-            if (id?.startsWith('address:')) address = text;
-            if (id?.startsWith('authority:')) website = await btn.getAttribute('href') || text;
-            if (id?.startsWith('phone:border:')) phone = text;
-          }
-
-          // Extract rating/reviews
-          try {
-            const ratingText = await page.locator('div[role="main"] span[aria-label*="stars"]').first().getAttribute('aria-label');
-            if (ratingText) {
-              const rMatch = ratingText.match(/([\d\.]+)\s*stars/);
-              if (rMatch) rating = parseFloat(rMatch[1]);
-              
-              const revMatch = ratingText.match(/([\d\,]+)\s*Reviews/);
-              if (revMatch) reviewCount = parseInt(revMatch[1].replace(/,/g, ''));
-            }
-          } catch (e) {}
-          
-          // Category
-          try {
-            const catEl = await page.locator('button[jsaction="pane.rating.category"]').first();
-            if (catEl) category = await catEl.innerText();
-          } catch (e) {}
-
-          // Lat/Lng from URL
-          let lat = null;
-          let lng = null;
-          const mapUrlMatch = page.url().match(/!3d([-?\d\.]+)!4d([-?\d\.]+)/);
-          if (mapUrlMatch) {
-            lat = parseFloat(mapUrlMatch[1]);
-            lng = parseFloat(mapUrlMatch[2]);
-          }
-
-          if (onProgress) onProgress(`[${leads.length + 1}/${maxResults}] Extracted: ${name}`);
-
-          leads.push({
-            name,
-            category,
-            address,
-            phone,
-            website,
-            rating,
-            reviewCount,
-            latitude: lat,
-            longitude: lng,
-            googleMapsUrl: page.url(),
-            social: { instagram: null, facebook: null, linkedin: null, twitter: null }
-          });
-        } catch (e) {
-          console.error('Error parsing a card:', e);
+        if (href && !seenUrls.has(href)) {
+          seenUrls.add(href);
+          businessUrls.push(href);
+          if (onProgress) onProgress(`Found URL for lead ${businessUrls.length}/${maxResults}...`);
         }
       }
 
@@ -219,7 +147,7 @@ export async function scrapeGoogleMaps(niche: string, location: string, maxResul
       const feed = await page.$('div[role="feed"]');
       if (feed) {
         await feed.evaluate((el: any) => el.scrollBy(0, 1000));
-        await sleep(1500); // Wait for network requests to populate more
+        await sleep(1500); 
         
         const currentHeight = await feed.evaluate((el: any) => el.scrollHeight);
         if (currentHeight === previousHeight) {
@@ -230,6 +158,96 @@ export async function scrapeGoogleMaps(niche: string, location: string, maxResul
         }
       } else {
         break;
+      }
+    }
+
+    if (onProgress) onProgress(`Collected ${businessUrls.length} links. Closing main feed to free RAM...`);
+    await page.close(); // FREE MASSIVE MEMORY
+
+    // Now visit each URL one by one in a fresh tab, then close it to prevent memory leaks
+    for (let i = 0; i < businessUrls.length; i++) {
+      const href = businessUrls[i];
+      const detailPage = await context.newPage();
+      
+      // Block images on detail page too
+      await detailPage.route('**/*', (route) => {
+        const type = route.request().resourceType();
+        if (['image', 'media', 'font', 'stylesheet'].includes(type) || route.request().url().includes('/maps/vt/')) {
+          route.abort();
+        } else {
+          route.continue();
+        }
+      });
+
+      try {
+        await detailPage.goto(href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await detailPage.waitForSelector('h1', { timeout: 10000 });
+        
+        const name = await detailPage.locator('h1').innerText().catch(() => '');
+        if (!name) {
+           await detailPage.close();
+           continue;
+        }
+
+        let address = 'N/A';
+        let website = null;
+        let phone = null;
+        let rating: number | null = null;
+        let reviewCount: number | null = null;
+        let category = 'N/A';
+
+        const infoButtons = await detailPage.$$('button[data-item-id]');
+        for (const btn of infoButtons) {
+          const id = await btn.getAttribute('data-item-id');
+          const text = await btn.innerText();
+          if (id?.startsWith('address:')) address = text;
+          if (id?.startsWith('authority:')) website = await btn.getAttribute('href') || text;
+          if (id?.startsWith('phone:border:')) phone = text;
+        }
+
+        try {
+          const ratingText = await detailPage.locator('div[role="main"] span[aria-label*="stars"]').first().getAttribute('aria-label');
+          if (ratingText) {
+            const rMatch = ratingText.match(/([\d\.]+)\s*stars/);
+            if (rMatch) rating = parseFloat(rMatch[1]);
+            const revMatch = ratingText.match(/([\d\,]+)\s*Reviews/);
+            if (revMatch) reviewCount = parseInt(revMatch[1].replace(/,/g, ''));
+          }
+        } catch (e) {}
+        
+        try {
+          const catEl = await detailPage.locator('button[jsaction="pane.rating.category"]').first();
+          if (catEl) category = await catEl.innerText();
+        } catch (e) {}
+
+        let lat = null;
+        let lng = null;
+        const mapUrlMatch = detailPage.url().match(/!3d([-?\d\.]+)!4d([-?\d\.]+)/);
+        if (mapUrlMatch) {
+          lat = parseFloat(mapUrlMatch[1]);
+          lng = parseFloat(mapUrlMatch[2]);
+        }
+
+        if (onProgress) onProgress(`[${i + 1}/${businessUrls.length}] Extracted: ${name}`);
+
+        leads.push({
+          name,
+          category,
+          address,
+          phone,
+          website,
+          rating,
+          reviewCount,
+          latitude: lat,
+          longitude: lng,
+          googleMapsUrl: detailPage.url(),
+          social: { instagram: null, facebook: null, linkedin: null, twitter: null }
+        });
+
+      } catch (e) {
+        console.error('Error parsing a detail page:', e);
+      } finally {
+        await detailPage.close(); // FREE MEMORY FOR THIS TAB
       }
     }
 
