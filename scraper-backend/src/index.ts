@@ -1,3 +1,4 @@
+process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
 import express from 'express';
 import cors from 'cors';
 import { scrapeGoogleMaps, ScrapedBusiness } from './scraper';

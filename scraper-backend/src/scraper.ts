@@ -1,3 +1,4 @@
+process.env.PLAYWRIGHT_BROWSERS_PATH = '0';
 import { chromium, Page } from 'playwright';
 import * as cheerio from 'cheerio';
 
