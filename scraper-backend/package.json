@@ -4,9 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/index.ts",
+    "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
-    "render-build": "npm install && npx playwright install chromium"
+    "build": "npx tsc",
+    "render-build": "npm install && npx playwright install chromium && npm run build"
   },
   "keywords": [],
   "type": "commonjs",
