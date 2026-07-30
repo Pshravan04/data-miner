@@ -234,6 +234,9 @@ function processSearchResult(
   const phone = extractPhone(combinedText);
   const email = extractEmail(combinedText);
 
+  // STRICT FILTER: Must have either a phone or email to be considered a lead from web search
+  if (phone === 'N/A' && email === 'N/A') return;
+
   results.push({
     Name: name,
     Niche: niche,
@@ -407,28 +410,29 @@ export async function scrapeGoogleMaps(
   let allLeads: ScrapedBusiness[] = [];
   const cleanLoc = location.split(',')[0].trim();
 
-  // 1. Search Web Engines (DDG -> Yahoo -> AOL)
-  const queries = [
-    `${niche} in ${cleanLoc} phone contact`,
-    `best ${niche} ${cleanLoc} phone number`,
-    `"${niche}" "${cleanLoc}" site:justdial.com OR site:sulekha.com`,
-    `"${niche}" "${cleanLoc}" "+91"`,
-  ];
+  // 1. Spatial Databases (Nominatim -> Overpass) FIRST - These yield actual businesses
+  logCallback(`🗺️ Prioritizing Map Databases for highest quality...`);
+  const geoBatch = await searchSpatialAPI(niche, location, maxResults, seenNames, logCallback);
+  allLeads.push(...geoBatch);
+  logCallback(`📊 Leads found from Map Databases: ${allLeads.length}`);
 
-  for (const q of queries) {
-    if (allLeads.length >= maxResults) break;
-    logCallback(`🔍 Querying: "${q}"`);
-    const batch = await searchWebEngines(q, maxResults - allLeads.length, seenNames, niche, location, logCallback);
-    allLeads.push(...batch);
-    logCallback(`📊 Leads found so far: ${allLeads.length}`);
-    await new Promise(r => setTimeout(r, 600)); // Rate limit pause
-  }
-
-  // 2. Spatial Databases (Nominatim -> Overpass)
+  // 2. Search Web Engines (DDG -> Yahoo -> AOL) ONLY if we need more leads
   if (allLeads.length < maxResults) {
-    const geoBatch = await searchSpatialAPI(niche, location, maxResults - allLeads.length, seenNames, logCallback);
-    allLeads.push(...geoBatch);
-    logCallback(`📊 Leads found after Geo Search: ${allLeads.length}`);
+    const queries = [
+      `${niche} in ${cleanLoc} phone contact`,
+      `best ${niche} ${cleanLoc} phone number`,
+      `"${niche}" "${cleanLoc}" site:justdial.com OR site:sulekha.com`,
+      `"${niche}" "${cleanLoc}" "+91"`,
+    ];
+
+    for (const q of queries) {
+      if (allLeads.length >= maxResults) break;
+      logCallback(`🔍 Querying fallback web engines: "${q}"`);
+      const batch = await searchWebEngines(q, maxResults - allLeads.length, seenNames, niche, location, logCallback);
+      allLeads.push(...batch);
+      logCallback(`📊 Leads found so far: ${allLeads.length}`);
+      await new Promise(r => setTimeout(r, 600)); // Rate limit pause
+    }
   }
 
   logCallback(`🎯 Search complete: ${allLeads.length} leads extracted`);
