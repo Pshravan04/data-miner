@@ -10,12 +10,6 @@ export default function Home() {
   const [location, setLocation] = useState('');
   const [maxResults, setMaxResults] = useState(50);
   
-  // Platform selection
-  const availablePlatforms = [
-    'All Platforms', 'Google Maps', 'Instagram', 'Facebook', 'LinkedIn', 'Justdial', 'YellowPages'
-  ];
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['All Platforms']);
-
   // Job State
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('idle');
@@ -23,26 +17,11 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const [resultData, setResultData] = useState<any[] | null>(null);
 
-  const togglePlatform = (p: string) => {
-    if (p === 'All Platforms') {
-      setSelectedPlatforms(['All Platforms']);
-      return;
-    }
-
-    setSelectedPlatforms(prev => {
-      const filtered = prev.filter(x => x !== 'All Platforms');
-      return filtered.includes(p) 
-        ? filtered.filter(x => x !== p) 
-        : [...filtered, p];
-    });
-  };
-
   const startJob = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedPlatforms.length === 0) return alert("Select at least one platform");
     
     setStatus('processing');
-    setLogs(['[SYSTEM] Initializing 8-bit scraper crew...']);
+    setLogs(['[SYSTEM] Initializing Google Maps search...']);
     setProgress('Starting job...');
     setResultData(null);
 
@@ -52,8 +31,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           niche: niche.trim() || 'Businesses', 
-          location: location.trim() || 'Global', 
-          platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['Google Maps'], 
+          location: location.trim() || 'India', 
           maxResults: maxResults || 50 
         })
       });
@@ -284,25 +262,13 @@ export default function Home() {
 
               <div>
                 <label className="block font-silkscreen text-xs text-gray-800 mb-2 uppercase">
-                  Select Target Platforms
+                  Data Source
                 </label>
-                <p className="text-xs text-gray-500 mb-3 font-silkscreen">Select directories to mine:</p>
-                <div className="flex flex-wrap gap-2">
-                  {availablePlatforms.map(p => (
-                    <button
-                      key={p}
-                      type="button"
-                      disabled={status === 'processing'}
-                      onClick={() => togglePlatform(p)}
-                      className={`px-3 py-1.5 text-xs font-silkscreen border-2 border-black transition-all ${
-                        selectedPlatforms.includes(p) 
-                        ? 'bg-[#FBBF24] text-black shadow-[2px_2px_0px_#EA580C] font-bold' 
-                        : 'bg-[#FFFDF5] text-gray-700 border-gray-300 hover:border-[#EA580C]'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1.5 text-xs font-silkscreen border-2 border-black bg-[#FBBF24] text-black shadow-[2px_2px_0px_#EA580C] font-bold">
+                    📍 Google Maps
+                  </span>
+                  <span className="text-xs text-gray-500 font-silkscreen">Free • No API key needed</span>
                 </div>
               </div>
 
