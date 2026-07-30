@@ -6,7 +6,7 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "nodemon src/index.ts",
-    "render-build": "npm install && npx playwright install chromium --with-deps"
+    "render-build": "npm install && npx playwright install chromium"
   },
   "keywords": [],
   "type": "commonjs",
