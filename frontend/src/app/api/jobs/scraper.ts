@@ -13,13 +13,41 @@ export interface ScrapedBusiness {
   Socials?: string;
 }
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+// ──────────────────────────────────────────────
+// Anti-Bot: Rotating User Agents
+// ──────────────────────────────────────────────
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:126.0) Gecko/20100101 Firefox/126.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/126.0.0.0 Safari/537.36'
+];
+
+function getRandomUA() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+function getAntiBotHeaders(acceptType: 'html' | 'json' = 'html') {
+  return {
+    'User-Agent': getRandomUA(),
+    'Accept': acceptType === 'html' ? 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8' : 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Upgrade-Insecure-Requests': '1'
+  };
+}
 
 // ──────────────────────────────────────────────
 // Utility helpers
 // ──────────────────────────────────────────────
 
-async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 6000): Promise<Response> {
+async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -34,7 +62,6 @@ async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 6000
 
 function extractPhone(text: string): string {
   if (!text) return 'N/A';
-  // Indian mobile
   const mobileRe = /(?:\+?91[\s.\-]?)?(?:0)?([6-9]\d{4}[\s.\-]?\d{5}|[6-9]\d{9})/g;
   const m = text.match(mobileRe);
   if (m) {
@@ -77,12 +104,151 @@ function isJunk(name: string): boolean {
   const l = name.toLowerCase();
   const junk = ['wikipedia', 'dictionary', 'definition', 'about us', 'contact us',
     'terms of service', 'privacy policy', 'how to', 'guide', 'blog', 'forum',
-    'sign up', 'login', 'career', 'hiring', 'news', 'youtube', 'pinterest'];
+    'sign up', 'login', 'career', 'hiring', 'news', 'youtube', 'pinterest', 'justdial', 'sulekha'];
   return junk.some(j => l.includes(j));
 }
 
 // ──────────────────────────────────────────────
-// City coordinates for Overpass spatial search
+// Multi-Engine Search Fallback (HTML Parsers)
+// ──────────────────────────────────────────────
+
+async function searchWebEngines(
+  query: string,
+  maxResults: number,
+  seenNames: Set<string>,
+  niche: string,
+  location: string,
+  logCallback: (msg: string) => void
+): Promise<ScrapedBusiness[]> {
+  const results: ScrapedBusiness[] = [];
+
+  // Try DuckDuckGo first
+  try {
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    logCallback(`🦆 Trying DuckDuckGo...`);
+    const res = await fetchWithTimeout(url, { headers: getAntiBotHeaders('html') }, 8000);
+
+    if (res.ok) {
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      const elements = $('.result').toArray();
+
+      for (const el of elements) {
+        if (results.length >= maxResults) break;
+        const titleEl = $(el).find('.result__title a, .result__a');
+        const title = titleEl.text().trim();
+        let href = titleEl.attr('href') || '';
+        const snippet = $(el).find('.result__snippet').text().trim();
+
+        if (href.includes('uddg=')) {
+          try { href = new URL(href, 'https://duckduckgo.com').searchParams.get('uddg') || href; } catch {}
+        }
+        processSearchResult(title, snippet, href, niche, location, seenNames, results, 'DuckDuckGo');
+      }
+      if (results.length > 0) return results;
+    } else {
+      logCallback(`⚠️ DuckDuckGo returned HTTP ${res.status}. Falling back...`);
+    }
+  } catch (e: any) {
+    logCallback(`⚠️ DuckDuckGo failed: ${e.message}`);
+  }
+
+  // Fallback 1: Yahoo Search
+  if (results.length === 0) {
+    try {
+      const url = `https://search.yahoo.com/search?p=${encodeURIComponent(query)}&n=20`;
+      logCallback(`🟣 Trying Yahoo Search...`);
+      const res = await fetchWithTimeout(url, { headers: getAntiBotHeaders('html') }, 8000);
+
+      if (res.ok) {
+        const html = await res.text();
+        const $ = cheerio.load(html);
+        const elements = $('.algo').toArray();
+
+        for (const el of elements) {
+          if (results.length >= maxResults) break;
+          const title = $(el).find('h3.title').text().trim();
+          const href = $(el).find('h3.title a').attr('href') || '';
+          const snippet = $(el).find('.compText').text().trim();
+          
+          processSearchResult(title, snippet, href, niche, location, seenNames, results, 'Yahoo');
+        }
+        if (results.length > 0) return results;
+      } else {
+        logCallback(`⚠️ Yahoo returned HTTP ${res.status}.`);
+      }
+    } catch (e: any) {
+      logCallback(`⚠️ Yahoo failed: ${e.message}`);
+    }
+  }
+
+  // Fallback 2: AOL Search
+  if (results.length === 0) {
+    try {
+      const url = `https://search.aol.com/aol/search?q=${encodeURIComponent(query)}&n=20`;
+      logCallback(`🔵 Trying AOL Search...`);
+      const res = await fetchWithTimeout(url, { headers: getAntiBotHeaders('html') }, 8000);
+
+      if (res.ok) {
+        const html = await res.text();
+        const $ = cheerio.load(html);
+        const elements = $('.algo').toArray();
+
+        for (const el of elements) {
+          if (results.length >= maxResults) break;
+          const title = $(el).find('h3.title').text().trim();
+          const href = $(el).find('h3.title a').attr('href') || '';
+          const snippet = $(el).find('.compText').text().trim();
+          
+          processSearchResult(title, snippet, href, niche, location, seenNames, results, 'AOL');
+        }
+      } else {
+        logCallback(`⚠️ AOL returned HTTP ${res.status}.`);
+      }
+    } catch (e: any) {
+      logCallback(`⚠️ AOL failed: ${e.message}`);
+    }
+  }
+
+  return results;
+}
+
+function processSearchResult(
+  title: string, 
+  snippet: string, 
+  href: string, 
+  niche: string, 
+  location: string, 
+  seenNames: Set<string>, 
+  results: ScrapedBusiness[],
+  source: string
+) {
+  const name = cleanTitle(title);
+  if (isJunk(name)) return;
+
+  const normName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!normName || seenNames.has(normName)) return;
+  seenNames.add(normName);
+
+  const combinedText = `${title} ${snippet}`;
+  const phone = extractPhone(combinedText);
+  const email = extractEmail(combinedText);
+
+  results.push({
+    Name: name,
+    Niche: niche,
+    Location: location,
+    Phone: phone,
+    Email: email,
+    Website: href.startsWith('http') && !href.includes('yahoo') && !href.includes('aol') ? href : 'N/A',
+    Ratings: 'N/A',
+    Source: source,
+  });
+}
+
+
+// ──────────────────────────────────────────────
+// OpenStreetMap Spatial (Overpass + Nominatim)
 // ──────────────────────────────────────────────
 
 const COORDS: Record<string, { lat: number; lon: number }> = {
@@ -97,84 +263,7 @@ const COORDS: Record<string, { lat: number; lon: number }> = {
   noida: { lat: 28.535, lon: 77.391 }, gurgaon: { lat: 28.457, lon: 77.027 },
 };
 
-// ──────────────────────────────────────────────
-// SOURCE 1: DuckDuckGo HTML search
-// ──────────────────────────────────────────────
-
-async function searchDuckDuckGo(
-  query: string,
-  maxResults: number,
-  seenNames: Set<string>,
-  niche: string,
-  location: string,
-  logCallback: (msg: string) => void
-): Promise<ScrapedBusiness[]> {
-  const results: ScrapedBusiness[] = [];
-
-  try {
-    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-    const res = await fetchWithTimeout(url, {
-      headers: { 'User-Agent': UA, 'Accept': 'text/html' }
-    }, 8000);
-
-    if (!res.ok) {
-      logCallback(`DuckDuckGo returned HTTP ${res.status}`);
-      return results;
-    }
-
-    const html = await res.text();
-    const $ = cheerio.load(html);
-    const elements = $('.result').toArray();
-
-    logCallback(`DuckDuckGo returned ${elements.length} search results`);
-
-    for (const el of elements) {
-      if (results.length >= maxResults) break;
-
-      const titleEl = $(el).find('.result__title a, .result__a');
-      const title = titleEl.text().trim();
-      let href = titleEl.attr('href') || '';
-      const snippet = $(el).find('.result__snippet').text().trim();
-
-      // DuckDuckGo wraps URLs in redirect — extract real URL
-      if (href.includes('uddg=')) {
-        try { href = new URL(href, 'https://duckduckgo.com').searchParams.get('uddg') || href; } catch {}
-      }
-
-      const name = cleanTitle(title);
-      if (isJunk(name)) continue;
-
-      const normName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (!normName || seenNames.has(normName)) continue;
-      seenNames.add(normName);
-
-      const combinedText = `${title} ${snippet}`;
-      const phone = extractPhone(combinedText);
-      const email = extractEmail(combinedText);
-
-      results.push({
-        Name: name,
-        Niche: niche,
-        Location: location,
-        Phone: phone,
-        Email: email,
-        Website: href.startsWith('http') ? href : 'N/A',
-        Ratings: 'N/A',
-        Source: 'Google Maps',
-      });
-    }
-  } catch (e: any) {
-    logCallback(`DuckDuckGo error: ${e.message}`);
-  }
-
-  return results;
-}
-
-// ──────────────────────────────────────────────
-// SOURCE 2: Overpass API (OpenStreetMap spatial)
-// ──────────────────────────────────────────────
-
-async function searchOverpass(
+async function searchSpatialAPI(
   niche: string,
   location: string,
   maxResults: number,
@@ -183,73 +272,129 @@ async function searchOverpass(
 ): Promise<ScrapedBusiness[]> {
   const results: ScrapedBusiness[] = [];
   const cleanLoc = location.split(',')[0].toLowerCase().trim();
-  const coords = COORDS[cleanLoc];
-
-  if (!coords) {
-    logCallback(`No coordinates for "${cleanLoc}", skipping Overpass`);
-    return results;
-  }
-
+  
+  // Method 1: OpenStreetMap Nominatim (more forgiving API)
+  logCallback(`🗺️ Trying OpenStreetMap Nominatim...`);
   try {
-    const radius = 50000; // 50km
-    const overpassQuery = `[out:json][timeout:10];(node["office"](around:${radius},${coords.lat},${coords.lon});node["shop"](around:${radius},${coords.lat},${coords.lon});node["amenity"](around:${radius},${coords.lat},${coords.lon});way["office"](around:${radius},${coords.lat},${coords.lon}););out tags 500;`;
-    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(`${niche} in ${location}`)}&format=json&addressdetails=1&extratags=1&limit=50`;
+    
+    // Nominatim strictly requires a custom User-Agent identifying the app
+    const res = await fetchWithTimeout(url, { 
+      headers: { 
+        'User-Agent': 'DataMinerApp/2.0 (contact@dataminer.local)',
+        'Accept': 'application/json'
+      } 
+    }, 10000);
 
-    const res = await fetchWithTimeout(url, { headers: { 'User-Agent': UA } }, 10000);
+    if (res.ok) {
+      const data = await res.json();
+      logCallback(`Nominatim returned ${data.length} results.`);
+      
+      for (const item of data) {
+        if (results.length >= maxResults) break;
+        const tags = item.extratags || {};
+        
+        const rawName = item.name || item.display_name?.split(',')[0];
+        if (!rawName || rawName.length < 3) continue;
 
-    if (!res.ok) {
-      logCallback(`Overpass returned HTTP ${res.status}`);
-      return results;
-    }
+        const name = cleanTitle(rawName);
+        if (isJunk(name)) continue;
 
-    const data = await res.json();
-    const elements = data.elements || [];
-    const nicheTerm = niche.toLowerCase().replace(/agents?|services?/gi, '').trim();
+        const normName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!normName || seenNames.has(normName)) continue;
+        seenNames.add(normName);
 
-    logCallback(`Overpass returned ${elements.length} spatial nodes, filtering for "${niche}"...`);
+        const phone = tags.phone || tags['contact:phone'] || extractPhone(JSON.stringify(tags));
+        const email = tags.email || tags['contact:email'] || extractEmail(JSON.stringify(tags));
+        const website = tags.website || tags['contact:website'] || 'N/A';
 
-    for (const el of elements) {
-      if (results.length >= maxResults) break;
-      const tags = el.tags || {};
-      const rawName = tags.name;
-      if (!rawName || rawName.length < 3) continue;
-
-      const name = cleanTitle(rawName);
-      if (isJunk(name)) continue;
-
-      const normName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (!normName || seenNames.has(normName)) continue;
-
-      // Filter: tag values must relate to the niche
-      const tagStr = JSON.stringify(tags).toLowerCase();
-      if (!tagStr.includes(nicheTerm) && !tagStr.includes('office') && !tagStr.includes('agency') && !tagStr.includes('company') && !tagStr.includes('service') && !tagStr.includes('shop')) continue;
-
-      seenNames.add(normName);
-
-      const phone = tags.phone || tags['contact:phone'] || extractPhone(JSON.stringify(tags));
-      const email = tags.email || tags['contact:email'] || extractEmail(JSON.stringify(tags));
-      const website = tags.website || tags['contact:website'] || 'N/A';
-
-      results.push({
-        Name: name,
-        Niche: niche,
-        Location: location,
-        Phone: phone || 'N/A',
-        Email: email || 'N/A',
-        Website: website.startsWith('http') ? website : 'N/A',
-        Ratings: 'N/A',
-        Source: 'Google Maps',
-      });
+        results.push({
+          Name: name,
+          Niche: niche,
+          Location: location,
+          Phone: phone || 'N/A',
+          Email: email || 'N/A',
+          Website: website.startsWith('http') ? website : 'N/A',
+          Ratings: 'N/A',
+          Source: 'OpenStreetMap',
+        });
+      }
+    } else {
+      logCallback(`⚠️ Nominatim returned HTTP ${res.status}`);
     }
   } catch (e: any) {
-    logCallback(`Overpass error: ${e.message}`);
+    logCallback(`⚠️ Nominatim failed: ${e.message}`);
+  }
+
+  // Method 2: Overpass API Fallback (with fixed headers)
+  if (results.length < maxResults && COORDS[cleanLoc]) {
+    const coords = COORDS[cleanLoc];
+    logCallback(`🗺️ Falling back to Overpass API for coordinates...`);
+    try {
+      const radius = 50000;
+      const overpassQuery = `[out:json][timeout:15];(node["office"](around:${radius},${coords.lat},${coords.lon});node["shop"](around:${radius},${coords.lat},${coords.lon});node["amenity"](around:${radius},${coords.lat},${coords.lon});way["office"](around:${radius},${coords.lat},${coords.lon}););out tags 200;`;
+      const url = `https://overpass-api.de/api/interpreter`;
+      
+      const res = await fetchWithTimeout(url, { 
+        method: 'POST',
+        headers: { 
+          // Overpass requires explicit URL-encoded content type and accepts JSON
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+          'User-Agent': getRandomUA()
+        },
+        body: `data=${encodeURIComponent(overpassQuery)}`
+      }, 15000);
+
+      if (res.ok) {
+        const data = await res.json();
+        const elements = data.elements || [];
+        const nicheTerm = niche.toLowerCase().replace(/agents?|services?/gi, '').trim();
+
+        for (const el of elements) {
+          if (results.length >= maxResults) break;
+          const tags = el.tags || {};
+          const rawName = tags.name;
+          if (!rawName || rawName.length < 3) continue;
+
+          const name = cleanTitle(rawName);
+          if (isJunk(name)) continue;
+
+          const normName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (!normName || seenNames.has(normName)) continue;
+
+          const tagStr = JSON.stringify(tags).toLowerCase();
+          if (!tagStr.includes(nicheTerm) && !tagStr.includes('office') && !tagStr.includes('agency') && !tagStr.includes('company') && !tagStr.includes('service') && !tagStr.includes('shop')) continue;
+
+          seenNames.add(normName);
+          const phone = tags.phone || tags['contact:phone'] || extractPhone(JSON.stringify(tags));
+          const email = tags.email || tags['contact:email'] || extractEmail(JSON.stringify(tags));
+          const website = tags.website || tags['contact:website'] || 'N/A';
+
+          results.push({
+            Name: name,
+            Niche: niche,
+            Location: location,
+            Phone: phone || 'N/A',
+            Email: email || 'N/A',
+            Website: website.startsWith('http') ? website : 'N/A',
+            Ratings: 'N/A',
+            Source: 'Overpass API',
+          });
+        }
+      } else {
+        logCallback(`⚠️ Overpass returned HTTP ${res.status}`);
+      }
+    } catch (e: any) {
+      logCallback(`⚠️ Overpass failed: ${e.message}`);
+    }
   }
 
   return results;
 }
 
 // ──────────────────────────────────────────────
-// Main export: scrapeGoogleMaps
+// Main export
 // ──────────────────────────────────────────────
 
 export async function scrapeGoogleMaps(
@@ -262,7 +407,7 @@ export async function scrapeGoogleMaps(
   let allLeads: ScrapedBusiness[] = [];
   const cleanLoc = location.split(',')[0].trim();
 
-  // STEP 1: DuckDuckGo search — multiple query variations for coverage
+  // 1. Search Web Engines (DDG -> Yahoo -> AOL)
   const queries = [
     `${niche} in ${cleanLoc} phone contact`,
     `best ${niche} ${cleanLoc} phone number`,
@@ -272,22 +417,21 @@ export async function scrapeGoogleMaps(
 
   for (const q of queries) {
     if (allLeads.length >= maxResults) break;
-    logCallback(`🔍 Searching: "${q}"`);
-    const batch = await searchDuckDuckGo(q, maxResults - allLeads.length, seenNames, niche, location, logCallback);
+    logCallback(`🔍 Querying: "${q}"`);
+    const batch = await searchWebEngines(q, maxResults - allLeads.length, seenNames, niche, location, logCallback);
     allLeads.push(...batch);
-    logCallback(`📊 Total so far: ${allLeads.length} leads`);
-    await new Promise(r => setTimeout(r, 500)); // Rate limit
+    logCallback(`📊 Leads found so far: ${allLeads.length}`);
+    await new Promise(r => setTimeout(r, 600)); // Rate limit pause
   }
 
-  // STEP 2: Overpass API — geo-based business data
+  // 2. Spatial Databases (Nominatim -> Overpass)
   if (allLeads.length < maxResults) {
-    logCallback(`🗺️ Searching OpenStreetMap spatial database...`);
-    const overpassLeads = await searchOverpass(niche, location, maxResults - allLeads.length, seenNames, logCallback);
-    allLeads.push(...overpassLeads);
-    logCallback(`📊 Total after Overpass: ${allLeads.length} leads`);
+    const geoBatch = await searchSpatialAPI(niche, location, maxResults - allLeads.length, seenNames, logCallback);
+    allLeads.push(...geoBatch);
+    logCallback(`📊 Leads found after Geo Search: ${allLeads.length}`);
   }
 
-  logCallback(`🎯 Google Maps extraction complete: ${allLeads.length} leads found`);
+  logCallback(`🎯 Search complete: ${allLeads.length} leads extracted`);
   return allLeads;
 }
 
@@ -302,7 +446,7 @@ export async function enrichLeadFromWebsite(websiteUrl: string): Promise<{ email
 
   try {
     const res = await fetchWithTimeout(websiteUrl, {
-      headers: { 'User-Agent': UA, 'Accept': 'text/html' }
+      headers: getAntiBotHeaders('html')
     }, 5000);
 
     if (!res.ok) return { email: 'N/A', socials: 'N/A', phone: 'N/A' };
