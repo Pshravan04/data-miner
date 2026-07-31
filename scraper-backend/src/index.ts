@@ -69,7 +69,7 @@ async function runExtraction(jobId: string, niche: string, location: string, lim
       Phone: lead.phone || 'N/A',
       Email: 'N/A', // We can add email scraping later if needed
       Website: lead.website || 'N/A',
-      Ratings: lead.rating ? `${lead.rating} (${lead.reviewCount})` : 'N/A',
+      Ratings: lead.rating ? (lead.reviewCount ? `${lead.rating} (${lead.reviewCount})` : `${lead.rating}`) : 'N/A',
       Source: 'Google Maps Playwright',
       Socials: [lead.social.instagram, lead.social.facebook, lead.social.linkedin, lead.social.twitter].filter(Boolean).join(', ') || 'N/A'
     }));
