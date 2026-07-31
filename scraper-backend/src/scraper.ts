@@ -123,110 +123,35 @@ export async function scrapeGoogleMaps(niche: string, location: string, maxResul
       return leads;
     }
 
-    if (onProgress) onProgress(`Results found. Starting human-like extraction loop...`);
+    if (onProgress) onProgress(`Results found. Starting extraction scroll loop...`);
 
     let previousHeight = 0;
     let unchangedScrolls = 0;
-    const seenNames = new Set<string>();
+    const businessUrls: string[] = [];
 
-    while (leads.length < maxResults && unchangedScrolls < 4) {
-      // Get all currently visible cards in the feed
+    // Scroll to load all cards up to maxResults and collect URLs
+    while (businessUrls.length < maxResults && unchangedScrolls < 4) {
       const cards = await page.$$('div[role="feed"] > div > div > a');
       
-      let processedInThisBatch = 0;
-
       for (const card of cards) {
-        if (leads.length >= maxResults) break;
-        
-        try {
-          const ariaLabel = await card.getAttribute('aria-label');
-          if (!ariaLabel || seenNames.has(ariaLabel)) continue;
-
-          // Click the card in the sidebar to open the detail pane
-          await card.scrollIntoViewIfNeeded();
-          await card.click();
-          await sleep(2000); // Wait for the slide-in animation and data load
-
-          // The h1 in the detail pane should match the business name
-          const name = await page.locator('h1').innerText().catch(() => ariaLabel);
-          
-          if (!name || seenNames.has(name)) continue;
-          seenNames.add(name);
-          processedInThisBatch++;
-
-          let address = 'N/A';
-          let website = null;
-          let phone = null;
-          let rating: number | null = null;
-          let reviewCount: number | null = null;
-          let category = 'N/A';
-
-          // Extract data from the detail pane
-          const infoButtons = await page.$$('button[data-item-id]');
-          for (const btn of infoButtons) {
-            const id = await btn.getAttribute('data-item-id');
-            const text = await btn.innerText();
-            if (id?.startsWith('address:')) address = text;
-            if (id?.startsWith('authority:')) website = await btn.getAttribute('href') || text;
-            if (id?.startsWith('phone:border:')) phone = text;
-          }
-
-          try {
-            const ratingText = await page.locator('div[role="main"] span[aria-label*="stars"]').first().getAttribute('aria-label');
-            if (ratingText) {
-              const rMatch = ratingText.match(/([\d\.]+)\s*stars/);
-              if (rMatch) rating = parseFloat(rMatch[1]);
-              const revMatch = ratingText.match(/([\d\,]+)\s*Reviews/);
-              if (revMatch) reviewCount = parseInt(revMatch[1].replace(/,/g, ''));
-            }
-          } catch (e) {}
-          
-          try {
-            const catEl = await page.locator('button[jsaction="pane.rating.category"]').first();
-            if (catEl) category = await catEl.innerText();
-          } catch (e) {}
-
-          let lat = null;
-          let lng = null;
-          const mapUrlMatch = page.url().match(/!3d([-?\d\.]+)!4d([-?\d\.]+)/);
-          if (mapUrlMatch) {
-            lat = parseFloat(mapUrlMatch[1]);
-            lng = parseFloat(mapUrlMatch[2]);
-          }
-
-          if (onProgress) onProgress(`[${leads.length + 1}/${maxResults}] Extracted: ${name}`);
-
-          leads.push({
-            name,
-            category,
-            address,
-            phone,
-            website,
-            rating,
-            reviewCount,
-            latitude: lat,
-            longitude: lng,
-            googleMapsUrl: page.url(),
-            social: { instagram: null, facebook: null, linkedin: null, twitter: null }
-          });
-
-        } catch (e) {
-          console.error('Error parsing a card detail:', e);
+        if (businessUrls.length >= maxResults) break;
+        const href = await card.getAttribute('href');
+        if (href && !seenUrls.has(href)) {
+          seenUrls.add(href);
+          businessUrls.push(href);
+          if (onProgress) onProgress(`Found URL for lead ${businessUrls.length}/${maxResults}...`);
         }
       }
 
-      // Scroll the feed to load more cards
       const feed = page.locator('div[role="feed"]');
       if (await feed.count() > 0) {
         await feed.evaluate((el: any) => el.scrollTo(0, el.scrollHeight));
-        await sleep(2500); 
+        await sleep(2000); 
         
         const currentHeight = await feed.evaluate((el: any) => el.scrollHeight);
-        
-        // If we didn't process any new cards and height didn't change, we might be at the end
-        if (currentHeight === previousHeight && processedInThisBatch === 0) {
+        if (currentHeight === previousHeight) {
           unchangedScrolls++;
-          if (unchangedScrolls >= 6) break; // End of list
+          if (unchangedScrolls >= 8) break; // More tolerant scroll end
         } else {
           unchangedScrolls = 0;
           previousHeight = currentHeight;
@@ -236,10 +161,100 @@ export async function scrapeGoogleMaps(niche: string, location: string, maxResul
       }
     }
 
-    if (onProgress) onProgress(`Extraction complete. Found ${leads.length} leads.`);
-    await browser.close();
+    if (onProgress) onProgress(`Collected ${businessUrls.length} links. Closing main feed to free RAM...`);
+    await page.close(); // FREE MASSIVE MEMORY
+
+    // Now visit each URL one by one in a fresh tab, then close it to prevent memory leaks
+    for (let i = 0; i < businessUrls.length; i++) {
+      const href = businessUrls[i];
+      const detailPage = await context.newPage();
+      
+      // Block ONLY heavy media, but allow images, fonts, and stylesheets so the detail pane JS runs properly
+      await detailPage.route('**/*', (route) => {
+        const type = route.request().resourceType();
+        if (['media', 'video'].includes(type) || route.request().url().includes('/maps/vt/')) {
+          route.abort();
+        } else {
+          route.continue();
+        }
+      });
+
+      try {
+        await detailPage.goto(href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await detailPage.waitForSelector('h1', { timeout: 10000 });
+        
+        const name = await detailPage.locator('h1').innerText().catch(() => '');
+        if (!name) {
+           await detailPage.close();
+           continue;
+        }
+
+        let address = 'N/A';
+        let website = null;
+        let phone = null;
+        let rating: number | null = null;
+        let reviewCount: number | null = null;
+        let category = 'N/A';
+
+        const infoButtons = await detailPage.$$('button[data-item-id]');
+        for (const btn of infoButtons) {
+          const id = await btn.getAttribute('data-item-id');
+          const text = await btn.innerText();
+          if (id?.startsWith('address:')) address = text;
+          if (id?.startsWith('authority:')) website = await btn.getAttribute('href') || text;
+          if (id?.startsWith('phone:border:')) phone = text;
+        }
+
+        try {
+          const ratingText = await detailPage.locator('div[role="main"] span[aria-label*="stars"]').first().getAttribute('aria-label');
+          if (ratingText) {
+            const rMatch = ratingText.match(/([\d\.]+)\s*stars/);
+            if (rMatch) rating = parseFloat(rMatch[1]);
+            const revMatch = ratingText.match(/([\d\,]+)\s*Reviews/);
+            if (revMatch) reviewCount = parseInt(revMatch[1].replace(/,/g, ''));
+          }
+        } catch (e) {}
+        
+        try {
+          const catEl = await detailPage.locator('button[jsaction="pane.rating.category"]').first();
+          if (catEl) category = await catEl.innerText();
+        } catch (e) {}
+
+        let lat = null;
+        let lng = null;
+        const mapUrlMatch = detailPage.url().match(/!3d([-?\d\.]+)!4d([-?\d\.]+)/);
+        if (mapUrlMatch) {
+          lat = parseFloat(mapUrlMatch[1]);
+          lng = parseFloat(mapUrlMatch[2]);
+        }
+
+        if (onProgress) onProgress(`[${i + 1}/${businessUrls.length}] Extracted: ${name}`);
+
+        leads.push({
+          name,
+          category,
+          address,
+          phone,
+          website,
+          rating,
+          reviewCount,
+          latitude: lat,
+          longitude: lng,
+          googleMapsUrl: detailPage.url(),
+          social: { instagram: null, facebook: null, linkedin: null, twitter: null }
+        });
+
+      } catch (e) {
+        console.error('Error parsing a detail page:', e);
+      } finally {
+        await detailPage.close(); // FREE MEMORY FOR THIS TAB
+      }
+    }
+
   } catch (e: any) {
     if (onProgress) onProgress(`Fatal scraping error: ${e.message}`);
+  } finally {
+    if (onProgress) onProgress(`Closing browser...`);
     await browser.close();
   }
 
